@@ -19,10 +19,8 @@ function bpmStatus(value, minBreaths, maxBreaths) {
   return 'normal'
 }
 
-function ringGradient(status) {
-  if (status === 'alarm') return 'conic-gradient(#ef4444 0deg, #ef4444 360deg)'
-  if (status === 'warning') return 'conic-gradient(#f59e0b 0deg, #f59e0b 360deg)'
-  return 'conic-gradient(#22c55e 0deg, #22c55e 360deg)'
+function emptyForm() {
+  return { id: '', patientName: '', age: '' }
 }
 
 function App() {
@@ -31,8 +29,9 @@ function App() {
   const [state, setState] = useState(null)
   const [selectedId, setSelectedId] = useState('demo-1')
   const [showForm, setShowForm] = useState(false)
+  const [formMode, setFormMode] = useState('add')
   const [theme, setTheme] = useState('dark')
-  const [form, setForm] = useState({ patientName: '', age: '' })
+  const [form, setForm] = useState(emptyForm())
 
   useEffect(() => {
     loadAll()
@@ -62,13 +61,20 @@ function App() {
     setSelectedId(data.selectedPatientId || 'demo-1')
   }
 
+  async function reloadPatients() {
+    const patientsRes = await fetch('/api/patients')
+    const patientsData = await patientsRes.json()
+    setPatients(patientsData)
+    return patientsData
+  }
+
   async function changeMode(mode) {
     await fetch('/api/mode', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode })
     })
-    await loadState()
+    await Promise.all([loadState(), reloadPatients()])
   }
 
   async function selectPatient(patientId) {
@@ -78,23 +84,58 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ patientId })
     })
+    await loadState()
+  }
+
+  function openAddPatient() {
+    setFormMode('add')
+    setForm(emptyForm())
+    setShowForm(true)
+  }
+
+  function openEditPatient() {
+    const selectedPatient = patients.realPatients.find((patient) => patient.id === selectedId)
+    if (!selectedPatient) return
+    setFormMode('edit')
+    setForm({
+      id: selectedPatient.id,
+      patientName: selectedPatient.patientName,
+      age: String(selectedPatient.age)
+    })
+    setShowForm(true)
   }
 
   async function submitPatient(event) {
     event.preventDefault()
-    await fetch('/api/patients', {
-      method: 'POST',
+
+    const payload = {
+      patientName: form.patientName,
+      age: Number(form.age)
+    }
+
+    const url = formMode === 'edit' ? `/api/patients/${form.id}` : '/api/patients'
+    const method = formMode === 'edit' ? 'PUT' : 'POST'
+
+    await fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        patientName: form.patientName,
-        age: Number(form.age)
-      })
+      body: JSON.stringify(payload)
     })
-    setForm({ patientName: '', age: '' })
+
+    setForm(emptyForm())
     setShowForm(false)
-    const patientsRes = await fetch('/api/patients')
-    const patientsData = await patientsRes.json()
-    setPatients(patientsData)
+    const patientsData = await reloadPatients()
+
+    if (formMode === 'add') {
+      const newestPatient = patientsData.realPatients[patientsData.realPatients.length - 1]
+      if (newestPatient) {
+        await selectPatient(newestPatient.id)
+      }
+    } else if (form.id) {
+      await selectPatient(form.id)
+    }
+
+    await loadState()
   }
 
   const isDemo = state?.mode !== 'live'
@@ -105,8 +146,36 @@ function App() {
     if (isDemo) {
       return state.demoNodes?.find((item) => item.patientId === selectedId) || state.demoNodes?.[0] || null
     }
+
+    const selectedPatient = patients.realPatients.find((patient) => patient.id === selectedId)
+    if (!state.live && selectedPatient) {
+      return {
+        ...selectedPatient,
+        online: false,
+        latencyMs: '--',
+        breathsPerMinute: '--',
+        breathingLevel: 0,
+        temperatureC: null,
+        temperatureState: 'normal',
+        source: 'waiting',
+        nodeId: '--'
+      }
+    }
+
+    if (selectedPatient && state.live) {
+      return {
+        ...state.live,
+        patientId: selectedPatient.id,
+        patientName: selectedPatient.patientName,
+        age: selectedPatient.age,
+        minBreaths: selectedPatient.minBreaths,
+        maxBreaths: selectedPatient.maxBreaths,
+        groupLabel: selectedPatient.groupLabel
+      }
+    }
+
     return state.live
-  }, [state, isDemo, selectedId])
+  }, [state, isDemo, selectedId, patients.realPatients])
 
   const currentBpmStatus = current ? bpmStatus(current.breathsPerMinute, current.minBreaths, current.maxBreaths) : 'normal'
   const breathingHeight = current ? clamp(Number(current.breathingLevel), 0, 100) : 0
@@ -126,6 +195,9 @@ function App() {
         </div>
 
         <div className="topbar-actions">
+          {!isDemo && patients.realPatients.length > 0 && (
+            <button className="mode-btn" onClick={openEditPatient}>Edit patient</button>
+          )}
           <button className={`mode-btn ${isDemo ? 'active' : ''}`} onClick={() => changeMode('demo')}>Demo</button>
           <button className={`mode-btn ${!isDemo ? 'active' : ''}`} onClick={() => changeMode('live')}>Live</button>
           <button className="mode-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
@@ -202,7 +274,12 @@ function App() {
             <div className="subtle">{isDemo ? '6 demo profiles' : 'Live patient list'}</div>
           </div>
           {!isDemo && (
-            <button className="add-btn" onClick={() => setShowForm(true)}>+</button>
+            <div className="topbar-actions">
+              {patients.realPatients.length > 0 && (
+                <button className="mode-btn" onClick={openEditPatient}>Edit</button>
+              )}
+              <button className="add-btn" onClick={openAddPatient}>+</button>
+            </div>
           )}
         </div>
 
@@ -223,7 +300,7 @@ function App() {
       {showForm && (
         <div className="modal-backdrop" onClick={() => setShowForm(false)}>
           <div className="modal" onClick={(event) => event.stopPropagation()}>
-            <h2>Add patient</h2>
+            <h2>{formMode === 'edit' ? 'Edit patient' : 'Add patient'}</h2>
             <form onSubmit={submitPatient} className="patient-form">
               <label>
                 Patient name
@@ -244,9 +321,12 @@ function App() {
                   required
                 />
               </label>
+              <div className="subtle">
+                The breathing limits are filled automatically based on age.
+              </div>
               <div className="form-actions">
                 <button type="button" className="mode-btn" onClick={() => setShowForm(false)}>Cancel</button>
-                <button type="submit" className="mode-btn active">Submit</button>
+                <button type="submit" className="mode-btn active">{formMode === 'edit' ? 'Save' : 'Submit'}</button>
               </div>
             </form>
           </div>
