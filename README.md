@@ -1,5 +1,5 @@
 # MedSense HMI Docker
-
+vite-plugin-pwa + React + Vite
 
 ## Start locally
 ```bash
