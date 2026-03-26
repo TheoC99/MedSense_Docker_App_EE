@@ -39,3 +39,18 @@ docker compose --profile cloudflare up --build -d
   "latencyMs": 146
 }
 ```
+## Gateway Serial commands
+``` bash
+help
+show
+name=Theo test
+age=33
+node=2
+bpm=20
+level=65
+temp=37.4
+lat=150
+auto=on
+auto=off
+postnow
+```
