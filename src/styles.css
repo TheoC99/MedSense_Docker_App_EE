@@ -133,6 +133,11 @@ h1 {
   place-items: center;
 }
 
+.patient-action {
+  width: 52px;
+  height: 52px;
+}
+
 .icon-btn.active,
 .language-option.active {
   background: linear-gradient(180deg, rgba(56, 189, 248, 0.28), rgba(56, 189, 248, 0.12));

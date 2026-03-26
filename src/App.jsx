@@ -658,12 +658,24 @@ export default function App() {
 
           <div className="topbar-actions">
             {selectedPatient ? (
-              <button type="button" className="mode-btn" onClick={openEditForm}>
-                {t.editPatient}
+              <button
+                type="button"
+                className="icon-btn patient-action"
+                aria-label={t.editPatient}
+                title={t.editPatient}
+                onClick={openEditForm}
+              >
+                <img src="/icons/ui/edit.svg" alt="" className="icon-image mono-icon" />
               </button>
             ) : null}
-            <button type="button" className="add-btn" onClick={openCreateForm}>
-              {t.addPatient}
+            <button
+              type="button"
+              className="add-btn icon-btn patient-action"
+              aria-label={t.addPatient}
+              title={t.addPatient}
+              onClick={openCreateForm}
+            >
+              <img src="/icons/ui/add.svg" alt="" className="icon-image mono-icon" />
             </button>
           </div>
         </div>
