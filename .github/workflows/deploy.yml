@@ -5,13 +5,16 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: self-hosted
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Show runner info
         run: |
@@ -19,10 +22,10 @@ jobs:
           hostname
           pwd
 
-      - name: Sync repo to deploy directory
+      - name: Sync files to deploy directory
         run: |
           mkdir -p /srv/stacks/MedSense_Docker_App_EE
-          rsync -av --delete \
+          rsync -rltv --delete \
             --exclude '.git' \
             --exclude '.github' \
             --exclude '.env' \
