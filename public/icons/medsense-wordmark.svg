@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">MedSense wordmark</title>
+  <desc id="desc">MedSense gradient wordmark with pulse mark</desc>
+  <defs>
+    <linearGradient id="brand" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0C7ECB" />
+      <stop offset="100%" stop-color="#2BB8E8" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="#FFFFFF" />
+  <text
+    x="256"
+    y="298"
+    text-anchor="middle"
+    font-family="Segoe UI, Arial, sans-serif"
+    font-size="102"
+    font-weight="800"
+    letter-spacing="-6"
+    fill="url(#brand)"
+  >
+    MedSense
+  </text>
+  <circle cx="311" cy="224" r="32" fill="#FFFFFF" />
+  <circle cx="311" cy="224" r="27" fill="none" stroke="url(#brand)" stroke-width="8" />
+  <path
+    d="M281 226h14l8-22 13 41 11-24h24"
+    fill="none"
+    stroke="url(#brand)"
+    stroke-width="8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>
