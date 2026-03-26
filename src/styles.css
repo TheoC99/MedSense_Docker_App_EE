@@ -145,6 +145,14 @@ h1 {
   display: block;
 }
 
+.mono-icon {
+  filter: none;
+}
+
+.app:not(.light) .mono-icon {
+  filter: brightness(0) invert(1);
+}
+
 .language-popover {
   position: absolute;
   top: calc(100% + 0.6rem);

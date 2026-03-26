@@ -509,10 +509,16 @@ export default function App() {
         <div className="topbar-actions">
           <button
             type="button"
-            className="mode-btn"
+            className="icon-btn theme-toggle"
+            aria-label={theme === 'dark' ? t.lightMode : t.darkMode}
+            title={theme === 'dark' ? t.lightMode : t.darkMode}
             onClick={() => setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'))}
           >
-            {theme === 'dark' ? t.lightMode : t.darkMode}
+            <img
+              src={theme === 'dark' ? '/icons/ui/sun.svg' : '/icons/ui/moon.svg'}
+              alt=""
+              className="icon-image mono-icon"
+            />
           </button>
 
           <div className="language-toggle" ref={languageMenuRef}>
@@ -524,7 +530,7 @@ export default function App() {
               aria-expanded={isLanguageMenuOpen}
               onClick={() => setIsLanguageMenuOpen((currentState) => !currentState)}
             >
-              <img src="/icons/languages/translate.svg" alt="" className="icon-image" />
+              <img src="/icons/languages/translate.svg" alt="" className="icon-image mono-icon" />
             </button>
 
             {isLanguageMenuOpen ? (
