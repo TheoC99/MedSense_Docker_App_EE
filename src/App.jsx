@@ -27,7 +27,7 @@ function App() {
   const [config, setConfig] = useState(null)
   const [patients, setPatients] = useState({ realPatients: [], demoPatients: [] })
   const [state, setState] = useState(null)
-  const [selectedId, setSelectedId] = useState('demo-1')
+  const [demoSelectedId, setDemoSelectedId] = useState('demo-1')
   const [showForm, setShowForm] = useState(false)
   const [formMode, setFormMode] = useState('add')
   const [theme, setTheme] = useState('dark')
@@ -51,7 +51,6 @@ function App() {
     setConfig(configData)
     setPatients(patientsData)
     setState(stateData)
-    setSelectedId((previous) => previous || stateData.selectedPatientId || 'demo-1')
   }
 
   async function loadState() {
@@ -76,8 +75,7 @@ function App() {
     await Promise.all([loadState(), reloadPatients()])
   }
 
-  async function selectPatient(patientId) {
-    setSelectedId(patientId)
+  async function selectLivePatient(patientId) {
     await fetch('/api/select-patient', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -93,7 +91,7 @@ function App() {
   }
 
   function openEditPatient() {
-    const selectedPatient = patients.realPatients.find((patient) => patient.id === selectedId)
+    const selectedPatient = patients.realPatients.find((patient) => patient.id === state?.liveSelectedPatientId)
     if (!selectedPatient) return
     setFormMode('edit')
     setForm({
@@ -128,28 +126,29 @@ function App() {
     if (formMode === 'add') {
       const newestPatient = patientsData.realPatients[patientsData.realPatients.length - 1]
       if (newestPatient) {
-        await selectPatient(newestPatient.id)
+        await selectLivePatient(newestPatient.id)
       }
     } else if (form.id) {
-      await selectPatient(form.id)
+      await selectLivePatient(form.id)
     }
 
     await loadState()
   }
 
   const isDemo = state?.mode !== 'live'
+  const liveSelectedId = state?.liveSelectedPatientId || ''
+  const liveSelectedPatient = patients.realPatients.find((patient) => patient.id === liveSelectedId) || null
   const list = isDemo ? patients.demoPatients : patients.realPatients
 
   const current = useMemo(() => {
     if (!state) return null
     if (isDemo) {
-      return state.demoNodes?.find((item) => item.patientId === selectedId) || state.demoNodes?.[0] || null
+      return state.demoNodes?.find((item) => item.patientId === demoSelectedId) || state.demoNodes?.[0] || null
     }
 
-    const selectedPatient = patients.realPatients.find((patient) => patient.id === selectedId)
-    if (!state.live && selectedPatient) {
+    if (!state.live && liveSelectedPatient) {
       return {
-        ...selectedPatient,
+        ...liveSelectedPatient,
         online: false,
         latencyMs: '--',
         breathsPerMinute: '--',
@@ -161,20 +160,20 @@ function App() {
       }
     }
 
-    if (selectedPatient && state.live) {
+    if (liveSelectedPatient && state.live) {
       return {
         ...state.live,
-        patientId: selectedPatient.id,
-        patientName: selectedPatient.patientName,
-        age: selectedPatient.age,
-        minBreaths: selectedPatient.minBreaths,
-        maxBreaths: selectedPatient.maxBreaths,
-        groupLabel: selectedPatient.groupLabel
+        patientId: liveSelectedPatient.id,
+        patientName: liveSelectedPatient.patientName,
+        age: liveSelectedPatient.age,
+        minBreaths: liveSelectedPatient.minBreaths,
+        maxBreaths: liveSelectedPatient.maxBreaths,
+        groupLabel: liveSelectedPatient.groupLabel
       }
     }
 
     return state.live
-  }, [state, isDemo, selectedId, patients.realPatients])
+  }, [state, isDemo, demoSelectedId, liveSelectedPatient])
 
   const currentBpmStatus = current ? bpmStatus(current.breathsPerMinute, current.minBreaths, current.maxBreaths) : 'normal'
   const breathingHeight = current ? clamp(Number(current.breathingLevel), 0, 100) : 0
@@ -194,7 +193,7 @@ function App() {
         </div>
 
         <div className="topbar-actions">
-          {!isDemo && patients.realPatients.length > 0 && (
+          {!isDemo && liveSelectedPatient && (
             <button className="mode-btn" onClick={openEditPatient}>Edit patient</button>
           )}
           <button className={`mode-btn ${isDemo ? 'active' : ''}`} onClick={() => changeMode('demo')}>Demo</button>
@@ -274,7 +273,7 @@ function App() {
           </div>
           {!isDemo && (
             <div className="topbar-actions">
-              {patients.realPatients.length > 0 && (
+              {liveSelectedPatient && (
                 <button className="mode-btn" onClick={openEditPatient}>Edit</button>
               )}
               <button className="add-btn" onClick={openAddPatient}>+</button>
@@ -286,8 +285,8 @@ function App() {
           {list.map((patient, index) => (
             <button
               key={patient.id}
-              className={`patient-tab ${selectedId === patient.id ? 'active' : ''}`}
-              onClick={() => selectPatient(patient.id)}
+              className={`patient-tab ${(isDemo ? demoSelectedId : liveSelectedId) === patient.id ? 'active' : ''}`}
+              onClick={() => (isDemo ? setDemoSelectedId(patient.id) : selectLivePatient(patient.id))}
             >
               <span className="patient-index">{index + 1}</span>
               <span className="patient-name">{patient.patientName}</span>

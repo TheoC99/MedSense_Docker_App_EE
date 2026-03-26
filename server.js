@@ -68,6 +68,16 @@ const demoProfiles = [
   { baseTemp: 36.8, tempSwing: 0.07, baseBpm: 16, bpmSwing: 1, latencies: [97, 108, 99, 113, 104] }
 ]
 
+function createInitialState() {
+  return {
+    updatedAt: new Date().toISOString(),
+    mode: 'demo',
+    liveSelectedPatientId: null,
+    live: null,
+    demoNodes: []
+  }
+}
+
 function ensureDataFiles() {
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true })
@@ -78,20 +88,7 @@ function ensureDataFiles() {
   }
 
   if (!fs.existsSync(stateFile)) {
-    fs.writeFileSync(
-      stateFile,
-      JSON.stringify(
-        {
-          updatedAt: new Date().toISOString(),
-          mode: 'demo',
-          selectedPatientId: 'demo-1',
-          live: null,
-          demoNodes: createDemoState()
-        },
-        null,
-        2
-      )
-    )
+    writeJson(stateFile, createInitialState())
   }
 }
 
@@ -149,9 +146,89 @@ function getRealPatients() {
   return readJson(patientsFile, []).map(enrichPatient)
 }
 
-function getSelectedPatient(state) {
+function getPatientById(patientId, patients = getRealPatients()) {
+  return patients.find((patient) => patient.id === patientId) || null
+}
+
+function deriveLiveSelectedPatientId(state, patients = getRealPatients()) {
+  const legacySelectedId = typeof state.selectedPatientId === 'string' && !state.selectedPatientId.startsWith('demo-')
+    ? state.selectedPatientId
+    : null
+
+  const candidateIds = [state.liveSelectedPatientId, legacySelectedId, state.live?.patientId]
+
+  for (const candidateId of candidateIds) {
+    if (typeof candidateId === 'string' && getPatientById(candidateId, patients)) {
+      return candidateId
+    }
+  }
+
+  return null
+}
+
+function normalizeState(state = {}) {
   const patients = getRealPatients()
-  return patients.find((patient) => patient.id === state.selectedPatientId) || patients[0] || null
+
+  return {
+    updatedAt: typeof state.updatedAt === 'string' ? state.updatedAt : new Date().toISOString(),
+    mode: state.mode === 'live' ? 'live' : 'demo',
+    liveSelectedPatientId: deriveLiveSelectedPatientId(state, patients),
+    live: state.live && typeof state.live === 'object' ? state.live : null,
+    demoNodes: Array.isArray(state.demoNodes) ? state.demoNodes : []
+  }
+}
+
+function readState() {
+  return normalizeState(readJson(stateFile, createInitialState()))
+}
+
+function writeState(state) {
+  writeJson(stateFile, normalizeState(state))
+}
+
+function getSelectedPatient(state, patients = getRealPatients()) {
+  return getPatientById(state.liveSelectedPatientId, patients)
+}
+
+function applyPatientToLiveState(live, patient) {
+  if (!live || !patient) return live
+
+  return {
+    ...live,
+    patientId: patient.id,
+    patientName: patient.patientName,
+    age: patient.age,
+    minBreaths: patient.minBreaths,
+    maxBreaths: patient.maxBreaths,
+    groupLabel: patient.groupLabel
+  }
+}
+
+function getStateResponse(state) {
+  const responseState = {
+    ...state,
+    demoNodes: Array.isArray(state.demoNodes) ? state.demoNodes : []
+  }
+
+  if (responseState.mode === 'demo') {
+    responseState.updatedAt = new Date().toISOString()
+    responseState.demoNodes = createDemoState()
+  }
+
+  if (responseState.mode === 'live' && responseState.live) {
+    const now = Date.now()
+    const offlineAfterMs = 5000
+
+    if ((now - Number(responseState.live.lastSeenEpochMs || 0)) > offlineAfterMs) {
+      responseState.live = {
+        ...responseState.live,
+        online: false,
+        source: 'stale'
+      }
+    }
+  }
+
+  return responseState
 }
 
 ensureDataFiles()
@@ -196,10 +273,11 @@ app.post('/api/patients', (req, res) => {
   patients.push(patient)
   writeJson(patientsFile, patients)
 
-  const state = readJson(stateFile, {})
-  if (!state.selectedPatientId || state.selectedPatientId === 'demo-1') {
-    state.selectedPatientId = patient.id
-    writeJson(stateFile, state)
+  const state = readState()
+  if (!state.liveSelectedPatientId) {
+    state.liveSelectedPatientId = patient.id
+    state.updatedAt = new Date().toISOString()
+    writeState(state)
   }
 
   res.status(201).json(patient)
@@ -234,112 +312,44 @@ app.put('/api/patients/:id', (req, res) => {
   patients[index] = updatedPatient
   writeJson(patientsFile, patients)
 
-  const state = readJson(stateFile, {})
-  if (state.live?.patientId === patientId) {
-    state.live = {
-      ...state.live,
-      patientId: updatedPatient.id,
-      patientName: updatedPatient.patientName,
-      age: updatedPatient.age,
-      minBreaths: updatedPatient.minBreaths,
-      maxBreaths: updatedPatient.maxBreaths,
-      groupLabel: updatedPatient.groupLabel
-    }
+  const state = readState()
+  if (state.live && state.liveSelectedPatientId === patientId) {
+    state.live = applyPatientToLiveState(state.live, updatedPatient)
     state.updatedAt = new Date().toISOString()
-    writeJson(stateFile, state)
+    writeState(state)
   }
 
   res.json(updatedPatient)
 })
 
 app.get('/api/state', (_req, res) => {
-  const fallback = {
-    updatedAt: new Date().toISOString(),
-    mode: 'demo',
-    selectedPatientId: 'demo-1',
-    live: null,
-    demoNodes: createDemoState()
-  }
-
-  const state = readJson(stateFile, fallback)
-
-  if (state.mode === 'demo') {
-    state.demoNodes = createDemoState()
-    state.updatedAt = new Date().toISOString()
-    writeJson(stateFile, state)
-  }
-
-  if (state.mode !== 'demo' && state.live) {
-    const now = Date.now()
-    const offlineAfterMs = 5000
-
-    if ((now - Number(state.live.lastSeenEpochMs || 0)) > offlineAfterMs) {
-      state.live = {
-        ...state.live,
-        online: false,
-        source: 'stale'
-      }
-      state.updatedAt = new Date().toISOString()
-      writeJson(stateFile, state)
-    }
-  }
-
-  res.json(state)
+  res.json(getStateResponse(readState()))
 })
 
 app.post('/api/mode', (req, res) => {
   const requestedMode = req.body?.mode === 'live' ? 'live' : 'demo'
-  const state = readJson(stateFile, {})
+  const state = readState()
   state.mode = requestedMode
-
-  if (requestedMode === 'live') {
-    const selectedPatient = getSelectedPatient(state)
-    if (selectedPatient) {
-      state.selectedPatientId = selectedPatient.id
-      if (state.live) {
-        state.live = {
-          ...state.live,
-          patientId: selectedPatient.id,
-          patientName: selectedPatient.patientName,
-          age: selectedPatient.age,
-          minBreaths: selectedPatient.minBreaths,
-          maxBreaths: selectedPatient.maxBreaths,
-          groupLabel: selectedPatient.groupLabel
-        }
-      }
-    }
-  } else {
-    state.selectedPatientId = state.selectedPatientId?.startsWith('demo-') ? state.selectedPatientId : 'demo-1'
-  }
-
   state.updatedAt = new Date().toISOString()
-  writeJson(stateFile, state)
-  res.json(state)
+  writeState(state)
+  res.json(getStateResponse(state))
 })
 
 app.post('/api/select-patient', (req, res) => {
-  const state = readJson(stateFile, {})
-  const requestedId = String(req.body?.patientId || state.selectedPatientId || 'demo-1')
-  state.selectedPatientId = requestedId
+  const state = readState()
+  const patients = getRealPatients()
+  const requestedId = String(req.body?.patientId || '')
+  const selectedPatient = getPatientById(requestedId, patients)
 
-  if (state.mode === 'live') {
-    const selectedPatient = getSelectedPatient(state)
-    if (selectedPatient && state.live) {
-      state.live = {
-        ...state.live,
-        patientId: selectedPatient.id,
-        patientName: selectedPatient.patientName,
-        age: selectedPatient.age,
-        minBreaths: selectedPatient.minBreaths,
-        maxBreaths: selectedPatient.maxBreaths,
-        groupLabel: selectedPatient.groupLabel
-      }
-    }
+  if (!selectedPatient) {
+    return res.status(404).json({ error: 'patient not found' })
   }
 
+  state.liveSelectedPatientId = selectedPatient.id
+  state.live = applyPatientToLiveState(state.live, selectedPatient)
   state.updatedAt = new Date().toISOString()
-  writeJson(stateFile, state)
-  res.json(state)
+  writeState(state)
+  res.json(getStateResponse(state))
 })
 
 app.post('/api/medsense', (req, res) => {
@@ -354,17 +364,11 @@ app.post('/api/medsense', (req, res) => {
   const temperatureC = Number.isFinite(Number(body.temperatureC)) ? Number(body.temperatureC) : 0
   const latencyMs = Number.isFinite(Number(body.latencyMs)) ? Number(body.latencyMs) : 0
 
-  const state = readJson(stateFile, {})
-  state.mode = body.mode === 'demo' ? 'demo' : 'live'
-
+  const state = readState()
   const selectedPatient = getSelectedPatient(state)
   const patientName = selectedPatient?.patientName || fallbackPatientName
   const age = selectedPatient?.age ?? fallbackAge
   const band = ageToBand(age)
-
-  if (selectedPatient) {
-    state.selectedPatientId = selectedPatient.id
-  }
 
   state.updatedAt = new Date().toISOString()
   state.live = {
@@ -385,7 +389,7 @@ app.post('/api/medsense', (req, res) => {
     source: 'esp32'
   }
 
-  writeJson(stateFile, state)
+  writeState(state)
   res.json({ ok: true, receivedAt: state.updatedAt })
 })
 
