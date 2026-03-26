@@ -1,0 +1,18 @@
+name: Deploy MedSense HMI
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, Linux, X64, delta]
+
+    steps:
+      - name: Deploy on delta
+        run: |
+          cd /srv/stacks/MedSense_Docker_App_EE
+          git fetch origin
+          git reset --hard origin/main
+          docker compose up --build -d
