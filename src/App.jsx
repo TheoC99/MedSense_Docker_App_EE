@@ -51,14 +51,13 @@ function App() {
     setConfig(configData)
     setPatients(patientsData)
     setState(stateData)
-    setSelectedId(stateData.selectedPatientId || 'demo-1')
+    setSelectedId((previous) => previous || stateData.selectedPatientId || 'demo-1')
   }
 
   async function loadState() {
     const response = await fetch('/api/state')
     const data = await response.json()
     setState(data)
-    setSelectedId(data.selectedPatientId || 'demo-1')
   }
 
   async function reloadPatients() {

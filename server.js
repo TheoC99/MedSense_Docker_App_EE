@@ -269,6 +269,21 @@ app.get('/api/state', (_req, res) => {
     writeJson(stateFile, state)
   }
 
+  if (state.mode !== 'demo' && state.live) {
+    const now = Date.now()
+    const offlineAfterMs = 5000
+
+    if ((now - Number(state.live.lastSeenEpochMs || 0)) > offlineAfterMs) {
+      state.live = {
+        ...state.live,
+        online: false,
+        source: 'stale'
+      }
+      state.updatedAt = new Date().toISOString()
+      writeJson(stateFile, state)
+    }
+  }
+
   res.json(state)
 })
 
