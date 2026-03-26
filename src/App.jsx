@@ -30,7 +30,10 @@ const translations = {
     bandToddler: 'Toddler',
     bandInfant: 'Infant',
     temperature: 'Temperature',
-    normalTemp: 'Normal 36.5-37.5 °C',
+    normalTemp: 'Normal 36.5-37.5 \u00B0C',
+    breathingCycle: 'Breathing cycle',
+    inhale: 'Inhale',
+    exhale: 'Exhale',
     breathing: 'Breathing',
     breathingRate: 'Breaths per minute',
     targetRange: 'Target range',
@@ -76,7 +79,10 @@ const translations = {
     bandToddler: 'Dreumes',
     bandInfant: 'Baby',
     temperature: 'Temperatuur',
-    normalTemp: 'Normaal 36.5-37.5 °C',
+    normalTemp: 'Normaal 36.5-37.5 \u00B0C',
+    breathingCycle: 'Ademcyclus',
+    inhale: 'Inademen',
+    exhale: 'Uitademen',
     breathing: 'Ademhaling',
     breathingRate: 'Ademhalingen per minuut',
     targetRange: 'Doelbereik',
@@ -122,7 +128,10 @@ const translations = {
     bandToddler: '幼児',
     bandInfant: '乳児',
     temperature: '温度',
-    normalTemp: '通常 36.5-37.5 °C',
+    normalTemp: '\u901a\u5e38 36.5-37.5 \u00B0C',
+    breathingCycle: '呼吸サイクル',
+    inhale: '吸う',
+    exhale: '吐く',
     breathing: '呼吸',
     breathingRate: '呼吸数',
     targetRange: '目標範囲',
@@ -171,26 +180,6 @@ function formatTargetRange(patient) {
     return '--'
   }
   return `${min}-${max}`
-}
-
-function bpmStatus(value, minBpm, maxBpm) {
-  const bpm = Number(value)
-  const min = Number(minBpm)
-  const max = Number(maxBpm)
-
-  if (!Number.isFinite(bpm) || !Number.isFinite(min) || !Number.isFinite(max)) {
-    return 'normal'
-  }
-
-  if (bpm < min || bpm > max) {
-    return 'alarm'
-  }
-
-  if (bpm <= min + 2 || bpm >= max - 2) {
-    return 'warning'
-  }
-
-  return 'normal'
 }
 
 function ageBandKey(age) {
@@ -311,23 +300,46 @@ export default function App() {
   const selectedPatient = patients.find((patient) => patient.id === selectedPatientId) || patients[0] || null
   const selectedNodeState = selectedPatient ? nodeStates[String(selectedPatient.nodeId)] || null : null
   const targetRange = formatTargetRange(selectedPatient)
-  const breathingState = bpmStatus(
-    selectedNodeState?.breathsPerMinute,
-    selectedPatient?.referenceMinBpm,
-    selectedPatient?.referenceMaxBpm
-  )
   const temperatureState = selectedNodeState?.temperatureState || 'normal'
-  const gaugeColor = {
-    normal: '#22c55e',
-    warning: '#f59e0b',
-    alarm: '#ef4444'
-  }[breathingState]
-  const maxBpm = Number(selectedPatient?.referenceMaxBpm) || 1
+  const currentBreathingLevel = clamp(Number(selectedNodeState?.breathingLevel) || 0, 0, 100)
+  const minTargetBpm = Number(selectedPatient?.referenceMinBpm)
+  const maxTargetBpm = Number(selectedPatient?.referenceMaxBpm)
   const currentBpm = Number(selectedNodeState?.breathsPerMinute)
-  const gaugeFill = clamp(Math.round(((Number.isFinite(currentBpm) ? currentBpm : 0) / maxBpm) * 100), 0, 100)
-  const gaugeStyle = {
-    background: `conic-gradient(${gaugeColor} 0 ${gaugeFill}%, rgba(148, 163, 184, 0.18) ${gaugeFill}% 100%)`
-  }
+  const bpmInRange =
+    Number.isFinite(currentBpm) &&
+    Number.isFinite(minTargetBpm) &&
+    Number.isFinite(maxTargetBpm) &&
+    currentBpm >= minTargetBpm &&
+    currentBpm <= maxTargetBpm
+  const gaugeScaleMax = Math.ceil(
+    Math.max(
+      Number.isFinite(maxTargetBpm) ? maxTargetBpm + 10 : 0,
+      Number.isFinite(currentBpm) ? currentBpm + 5 : 0,
+      40
+    ) / 5
+  ) * 5
+  const rangeStartPercent = Number.isFinite(minTargetBpm)
+    ? clamp(Math.round((minTargetBpm / gaugeScaleMax) * 100), 0, 100)
+    : 0
+  const rangeEndPercent = Number.isFinite(maxTargetBpm)
+    ? clamp(Math.round((maxTargetBpm / gaugeScaleMax) * 100), 0, 100)
+    : 100
+  const gaugeStyle =
+    Number.isFinite(minTargetBpm) && Number.isFinite(maxTargetBpm)
+      ? {
+          background: `conic-gradient(from -90deg, rgba(239, 68, 68, 0.88) 0 ${rangeStartPercent}%, rgba(34, 197, 94, 0.88) ${rangeStartPercent}% ${rangeEndPercent}%, rgba(239, 68, 68, 0.88) ${rangeEndPercent}% 100%)`
+        }
+      : {
+          background: 'conic-gradient(from -90deg, rgba(148, 163, 184, 0.18) 0 100%)'
+        }
+  const hasValidTargetRange = Number.isFinite(minTargetBpm) && Number.isFinite(maxTargetBpm)
+  const gaugeValueColor = Number.isFinite(currentBpm)
+    ? hasValidTargetRange
+      ? bpmInRange
+        ? 'var(--green)'
+        : 'var(--red)'
+      : 'var(--text)'
+    : 'var(--text)'
   const freshnessLabel = !selectedNodeState?.lastSeenEpochMs
     ? t.waiting
     : selectedNodeState.online
@@ -469,62 +481,41 @@ export default function App() {
           <div className="section-title">{t.temperature}</div>
           <div className={`temp-value ${temperatureState}`}>
             {Number.isFinite(Number(selectedNodeState?.temperatureC))
-              ? `${Number(selectedNodeState.temperatureC).toFixed(1)} °C`
+              ? `${Number(selectedNodeState.temperatureC).toFixed(1)} \u00B0C`
               : '--'}
           </div>
           <div className="subtle">{t.normalTemp}</div>
-          <div className="status-grid">
-            <div>
-              <div className="label">{t.source}</div>
-              <div className="metric">{sourceLabel}</div>
-            </div>
-            <div>
-              <div className="label">{t.freshness}</div>
-              <div className="metric">{freshnessLabel}</div>
-            </div>
-          </div>
         </section>
 
         <section className="center-panel">
           <article className="card breathing-card">
-            <div className="section-title">{t.breathing}</div>
+            <div className="section-title">{t.breathingCycle}</div>
             <div className="breathing-wrap">
               <div className="breathing-bar-shell">
                 <div
                   className="breathing-bar-fill"
                   style={{
-                    height: `${gaugeFill}%`,
-                    background: `linear-gradient(180deg, ${gaugeColor}, rgba(14, 165, 233, 0.45))`
+                    height: `${currentBreathingLevel}%`
                   }}
                 />
               </div>
 
-              <div>
-                <div className="label">{t.breathingRate}</div>
-                <div className="metric">{Number.isFinite(currentBpm) ? currentBpm : '--'}</div>
-              </div>
-
               <div className="breathing-scale">
-                <span>{Number(selectedPatient?.referenceMaxBpm) || '--'}</span>
-                <span>
-                  {selectedPatient
-                    ? Math.round(
-                        (Number(selectedPatient.referenceMinBpm) + Number(selectedPatient.referenceMaxBpm)) / 2
-                      )
-                    : '--'}
-                </span>
-                <span>{Number(selectedPatient?.referenceMinBpm) || '--'}</span>
+                <span>{t.inhale}</span>
+                <span>{t.exhale}</span>
               </div>
             </div>
           </article>
 
           <article className="card gauge-card">
-            <div className="section-title">{t.targetRange}</div>
+            <div className="section-title">{t.breathingRate}</div>
             <div className="gauge-shell">
               <div className="gauge-ring" style={gaugeStyle}>
                 <div className="gauge-inner">
                   <div>
-                    <div className="gauge-value">{Number.isFinite(currentBpm) ? currentBpm : '--'}</div>
+                    <div className="gauge-value" style={{ color: gaugeValueColor }}>
+                      {Number.isFinite(currentBpm) ? currentBpm : '--'}
+                    </div>
                     <div className="subtle">
                       {applyTemplate(t.gaugeTarget, {
                         targetRange
@@ -547,6 +538,14 @@ export default function App() {
             <div>
               <div className="label">{t.targetRange}</div>
               <div className="metric">{targetRange} bpm</div>
+            </div>
+            <div>
+              <div className="label">{t.source}</div>
+              <div className="metric">{sourceLabel}</div>
+            </div>
+            <div>
+              <div className="label">{t.freshness}</div>
+              <div className="metric">{freshnessLabel}</div>
             </div>
             <div>
               <div className="label">{t.lastUpdate}</div>
