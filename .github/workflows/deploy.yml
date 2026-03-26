@@ -10,15 +10,28 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Show runner info
         run: |
           whoami
           hostname
           pwd
 
-      - name: Deploy on delta
+      - name: Sync repo to deploy directory
+        run: |
+          mkdir -p /srv/stacks/MedSense_Docker_App_EE
+          rsync -av --delete \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude '.env' \
+            --exclude 'node_modules' \
+            --exclude 'dist' \
+            --exclude 'data' \
+            ./ /srv/stacks/MedSense_Docker_App_EE/
+
+      - name: Rebuild and restart app
         run: |
           cd /srv/stacks/MedSense_Docker_App_EE
-          git fetch origin
-          git reset --hard origin/main
           docker compose up --build -d
