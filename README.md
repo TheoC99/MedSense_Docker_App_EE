@@ -1,9 +1,5 @@
 # MedSense HMI Docker
 
-This version is fixed and complete.
-
-## What was broken
-The previous scaffold was missing `package.json`, `src/main.jsx`, `index.html`, and Vite config. That is why Docker failed with `react/jsx-runtime` resolution errors.
 
 ## Start locally
 ```bash
