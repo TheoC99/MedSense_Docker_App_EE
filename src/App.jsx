@@ -1,526 +1,674 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 
-const pollMs = 1000
-const languageOptions = [
-  { key: 'en', label: 'EN', locale: 'en-US' },
-  { key: 'nl', label: 'NL', locale: 'nl-NL' },
-  { key: 'ja', label: 'JP', locale: 'ja-JP' }
-]
+const fallbackLanguages = ['en', 'nl', 'ja']
+const localeByLanguage = {
+  en: 'en-US',
+  nl: 'nl-NL',
+  ja: 'ja-JP'
+}
 
 const translations = {
   en: {
-    appTitle: 'MedSense HMI',
-    noPatientSelected: 'No patient selected',
-    noPatientsAvailable: 'Add a patient to start monitoring a node.',
-    headerMeta: 'Node {nodeId} · {age} years · target {targetBpm} bpm',
-    temperature: 'Temperature',
-    normalTemp: 'Normal 36.5-37.5 deg C',
-    breathingCycle: 'Breathing cycle',
-    inhale: 'Inhale',
-    exhale: 'Exhale',
-    breathsPerMinute: 'Breaths per minute',
-    targetBpmLabel: 'target {targetBpm}',
-    nodeStatus: 'Node status',
-    online: 'Online',
-    offline: 'Offline',
-    node: 'Node',
-    latency: 'Latency',
-    source: 'Source',
-    lastUpdate: 'Last update',
-    patientsNodes: 'Patients / nodes',
-    patientCount: '{count} patients',
+    eyebrow: 'MedSense HMI',
+    title: 'Breathing monitor',
+    subtitle: 'Patient-linked node overview',
+    lightMode: 'White mode',
+    darkMode: 'Black mode',
+    patients: 'Patients',
     addPatient: 'Add patient',
     editPatient: 'Edit patient',
-    noPatientsYet: 'No patients yet. Create one to assign the next node slot.',
-    addPatientTitle: 'Add patient',
-    editPatientTitle: 'Edit patient',
-    patientName: 'Patient name',
-    age: 'Age',
-    targetBpm: 'Target bpm',
-    targetHint: 'Age suggests a default target. You can override it before saving.',
+    createPatient: 'Create patient',
+    saveChanges: 'Save changes',
     cancel: 'Cancel',
-    save: 'Save',
-    submit: 'Submit',
-    lightMode: 'White mode',
-    darkMode: 'Dark mode',
-    waitingSource: 'waiting'
-  },
-  nl: {
-    appTitle: 'MedSense HMI',
-    noPatientSelected: 'Geen patient geselecteerd',
-    noPatientsAvailable: 'Voeg een patient toe om een node te monitoren.',
-    headerMeta: 'Node {nodeId} · {age} jaar · target {targetBpm} bpm',
-    temperature: 'Temperatuur',
-    normalTemp: 'Normaal 36.5-37.5 graden C',
-    breathingCycle: 'Ademcyclus',
-    inhale: 'Inademen',
-    exhale: 'Uitademen',
-    breathsPerMinute: 'Ademhalingen per minuut',
-    targetBpmLabel: 'target {targetBpm}',
-    nodeStatus: 'Node status',
+    patientName: 'Name',
+    age: 'Age',
+    years: 'years',
+    ageGroup: 'Age group',
+    bandAdult: 'Adult',
+    bandSchool: 'School-age child',
+    bandPreschool: 'Preschooler',
+    bandToddler: 'Toddler',
+    bandInfant: 'Infant',
+    temperature: 'Temperature',
+    normalTemp: 'Normal 36.5-37.5 °C',
+    breathing: 'Breathing',
+    breathingRate: 'Breaths per minute',
+    targetRange: 'Target range',
+    gaugeTarget: 'target {targetRange} bpm',
+    status: 'Status',
+    source: 'Source',
+    sourceGateway: 'Gateway',
+    sourceWaiting: 'Waiting',
+    freshness: 'Freshness',
+    fresh: 'Fresh',
+    stale: 'Stale',
+    waiting: 'Waiting',
+    lastUpdate: 'Last update',
     online: 'Online',
     offline: 'Offline',
-    node: 'Node',
-    latency: 'Latentie',
-    source: 'Bron',
-    lastUpdate: 'Laatste update',
-    patientsNodes: 'Patienten / nodes',
-    patientCount: '{count} patienten',
+    noPatients: 'No patients yet. Create the first patient to link incoming node data.',
+    waitingSensor: 'Waiting for node data',
+    targetHint: 'Target range is filled automatically from age.',
+    loadError: 'Could not load data.',
+    saveError: 'Could not save patient.',
+    headerMeta: 'Node {nodeId} | {age} years | target {targetRange} bpm',
+    patientMeta: '{age} years | target {targetRange} bpm'
+  },
+  nl: {
+    eyebrow: 'MedSense HMI',
+    title: 'Ademhalingsmonitor',
+    subtitle: 'Node-overzicht gekoppeld aan patienten',
+    lightMode: 'Witte modus',
+    darkMode: 'Zwarte modus',
+    patients: 'Patienten',
     addPatient: 'Patient toevoegen',
     editPatient: 'Patient bewerken',
-    noPatientsYet: 'Nog geen patienten. Maak er een aan om de volgende node toe te wijzen.',
-    addPatientTitle: 'Patient toevoegen',
-    editPatientTitle: 'Patient bewerken',
-    patientName: 'Patientnaam',
-    age: 'Leeftijd',
-    targetBpm: 'Target bpm',
-    targetHint: 'Leeftijd geeft een standaard target. Je kunt die voor het opslaan aanpassen.',
+    createPatient: 'Patient aanmaken',
+    saveChanges: 'Wijzigingen opslaan',
     cancel: 'Annuleren',
-    save: 'Opslaan',
-    submit: 'Opslaan',
-    lightMode: 'Witte modus',
-    darkMode: 'Donkere modus',
-    waitingSource: 'wachten'
+    patientName: 'Naam',
+    age: 'Leeftijd',
+    years: 'jaar',
+    ageGroup: 'Leeftijdsgroep',
+    bandAdult: 'Volwassene',
+    bandSchool: 'Schoolkind',
+    bandPreschool: 'Peuter',
+    bandToddler: 'Dreumes',
+    bandInfant: 'Baby',
+    temperature: 'Temperatuur',
+    normalTemp: 'Normaal 36.5-37.5 °C',
+    breathing: 'Ademhaling',
+    breathingRate: 'Ademhalingen per minuut',
+    targetRange: 'Doelbereik',
+    gaugeTarget: 'doel {targetRange} bpm',
+    status: 'Status',
+    source: 'Bron',
+    sourceGateway: 'Gateway',
+    sourceWaiting: 'Wachten',
+    freshness: 'Actualiteit',
+    fresh: 'Actueel',
+    stale: 'Verouderd',
+    waiting: 'Wachten',
+    lastUpdate: 'Laatste update',
+    online: 'Online',
+    offline: 'Offline',
+    noPatients: 'Nog geen patienten. Maak de eerste patient aan om inkomende nodedata te koppelen.',
+    waitingSensor: 'Wachten op nodegegevens',
+    targetHint: 'Het doelbereik wordt automatisch op basis van leeftijd ingevuld.',
+    loadError: 'Gegevens konden niet worden geladen.',
+    saveError: 'Patient kon niet worden opgeslagen.',
+    headerMeta: 'Node {nodeId} | {age} jaar | doel {targetRange} bpm',
+    patientMeta: '{age} jaar | doel {targetRange} bpm'
   },
   ja: {
-    appTitle: 'MedSense HMI',
-    noPatientSelected: '患者が選択されていません',
-    noPatientsAvailable: 'ノード監視を始めるには患者を追加してください。',
-    headerMeta: 'Node {nodeId} ・ {age}歳 ・ target {targetBpm} bpm',
-    temperature: '体温',
-    normalTemp: '正常 36.5-37.5 度C',
-    breathingCycle: '呼吸サイクル',
-    inhale: '吸う',
-    exhale: '吐く',
-    breathsPerMinute: '1分あたりの呼吸数',
-    targetBpmLabel: 'target {targetBpm}',
-    nodeStatus: 'ノード状態',
-    online: 'オンライン',
-    offline: 'オフライン',
-    node: 'Node',
-    latency: '遅延',
-    source: 'ソース',
-    lastUpdate: '最終更新',
-    patientsNodes: '患者 / nodes',
-    patientCount: '{count} patients',
+    eyebrow: 'MedSense HMI',
+    title: '呼吸モニター',
+    subtitle: '患者に紐づくノード概要',
+    lightMode: '白表示',
+    darkMode: '黒表示',
+    patients: '患者一覧',
     addPatient: '患者を追加',
     editPatient: '患者を編集',
-    noPatientsYet: '患者がまだいません。追加すると次のノード枠に割り当てられます。',
-    addPatientTitle: '患者を追加',
-    editPatientTitle: '患者を編集',
-    patientName: '患者名',
-    age: '年齢',
-    targetBpm: 'Target bpm',
-    targetHint: '年齢から標準 target が提案されます。保存前に変更できます。',
+    createPatient: '患者を作成',
+    saveChanges: '保存',
     cancel: 'キャンセル',
-    save: '保存',
-    submit: '保存',
-    lightMode: 'ライトモード',
-    darkMode: 'ダークモード',
-    waitingSource: '待機中'
+    patientName: '名前',
+    age: '年齢',
+    years: '歳',
+    ageGroup: '年齢区分',
+    bandAdult: '成人',
+    bandSchool: '学童',
+    bandPreschool: '未就学児',
+    bandToddler: '幼児',
+    bandInfant: '乳児',
+    temperature: '温度',
+    normalTemp: '通常 36.5-37.5 °C',
+    breathing: '呼吸',
+    breathingRate: '呼吸数',
+    targetRange: '目標範囲',
+    gaugeTarget: '目標 {targetRange} bpm',
+    status: '状態',
+    source: '送信元',
+    sourceGateway: 'ゲートウェイ',
+    sourceWaiting: '待機中',
+    freshness: '鮮度',
+    fresh: '最新',
+    stale: '古い',
+    waiting: '待機中',
+    lastUpdate: '最終更新',
+    online: 'オンライン',
+    offline: 'オフライン',
+    noPatients: 'まだ患者がいません。最初の患者を作成してください。',
+    waitingSensor: 'ノードデータを待機中',
+    targetHint: '目標範囲は年齢に応じて自動設定されます。',
+    loadError: 'データを読み込めませんでした。',
+    saveError: '患者を保存できませんでした。',
+    headerMeta: 'ノード {nodeId} | {age}歳 | 目標 {targetRange} bpm',
+    patientMeta: '{age}歳 | 目標 {targetRange} bpm'
   }
 }
 
-function formatMessage(template, values = {}) {
-  return template.replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ''))
-}
-
-function formatTemp(temp) {
-  if (temp === null || temp === undefined || Number.isNaN(Number(temp))) return '--.-'
-  return Number(temp).toFixed(1)
+function readStoredValue(key, fallback) {
+  try {
+    return window.localStorage.getItem(key) || fallback
+  } catch {
+    return fallback
+  }
 }
 
 function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value))
+  return Math.min(Math.max(value, min), max)
 }
 
-function bpmStatus(value, targetBpm) {
-  if (!Number.isFinite(Number(value)) || !Number.isFinite(Number(targetBpm))) return 'normal'
-  const delta = Math.abs(Number(value) - Number(targetBpm))
-  if (delta > 4) return 'alarm'
-  if (delta > 2) return 'warning'
+function applyTemplate(template, values) {
+  return template.replace(/\{(\w+)\}/g, (_match, key) => String(values[key] ?? ''))
+}
+
+function formatTargetRange(patient) {
+  const min = Number(patient?.referenceMinBpm)
+  const max = Number(patient?.referenceMaxBpm)
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return '--'
+  }
+  return `${min}-${max}`
+}
+
+function bpmStatus(value, minBpm, maxBpm) {
+  const bpm = Number(value)
+  const min = Number(minBpm)
+  const max = Number(maxBpm)
+
+  if (!Number.isFinite(bpm) || !Number.isFinite(min) || !Number.isFinite(max)) {
+    return 'normal'
+  }
+
+  if (bpm < min || bpm > max) {
+    return 'alarm'
+  }
+
+  if (bpm <= min + 2 || bpm >= max - 2) {
+    return 'warning'
+  }
+
   return 'normal'
 }
 
-function emptyForm() {
-  return { id: '', patientName: '', age: '', targetBpm: '' }
+function ageBandKey(age) {
+  const value = Number(age)
+  if (!Number.isFinite(value)) return ''
+  if (value >= 18) return 'bandAdult'
+  if (value >= 6) return 'bandSchool'
+  if (value >= 3) return 'bandPreschool'
+  if (value >= 1) return 'bandToddler'
+  return 'bandInfant'
 }
 
-function getStoredValue(key, fallback) {
-  if (typeof window === 'undefined') return fallback
-  return window.localStorage.getItem(key) || fallback
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(options.headers || {})
+    }
+  })
+
+  const text = await response.text()
+  const data = text ? JSON.parse(text) : null
+
+  if (!response.ok) {
+    throw new Error(data?.error || `Request failed with ${response.status}`)
+  }
+
+  return data
 }
 
-function App() {
-  const [config, setConfig] = useState(null)
+export default function App() {
+  const [theme, setTheme] = useState(() => readStoredValue('medsense-theme', 'dark'))
+  const [language, setLanguage] = useState(() => readStoredValue('medsense-language', 'en'))
+  const [configLanguages, setConfigLanguages] = useState(fallbackLanguages)
   const [patients, setPatients] = useState([])
-  const [state, setState] = useState(null)
-  const [showForm, setShowForm] = useState(false)
-  const [formMode, setFormMode] = useState('add')
-  const [theme, setTheme] = useState(() => getStoredValue('medsense-theme', 'dark'))
-  const [language, setLanguage] = useState(() => getStoredValue('medsense-language', 'en'))
-  const [form, setForm] = useState(emptyForm())
+  const [nodeStates, setNodeStates] = useState({})
+  const [selectedPatientId, setSelectedPatientId] = useState(null)
+  const [isFormOpen, setIsFormOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [hasLoadError, setHasLoadError] = useState(false)
+  const [formError, setFormError] = useState('')
+  const [formState, setFormState] = useState({
+    id: null,
+    patientName: '',
+    age: ''
+  })
+
+  const availableLanguages = configLanguages.filter((code) => translations[code]) || fallbackLanguages
+  const activeLanguage = availableLanguages.includes(language) ? language : availableLanguages[0] || 'en'
+  const t = translations[activeLanguage]
+  const locale = localeByLanguage[activeLanguage] || localeByLanguage.en
+
+  async function loadData() {
+    const [configData, patientData, stateData] = await Promise.all([
+      fetchJson('/api/config'),
+      fetchJson('/api/patients'),
+      fetchJson('/api/state')
+    ])
+
+    setConfigLanguages(Array.isArray(configData?.languages) ? configData.languages : fallbackLanguages)
+    setPatients(Array.isArray(patientData?.patients) ? patientData.patients : [])
+    setNodeStates(stateData?.nodeStates && typeof stateData.nodeStates === 'object' ? stateData.nodeStates : {})
+
+    const nextSelectedId =
+      stateData?.selectedPatientId ||
+      patientData?.selectedPatientId ||
+      patientData?.patients?.[0]?.id ||
+      null
+
+    setSelectedPatientId(nextSelectedId)
+    setHasLoadError(false)
+  }
 
   useEffect(() => {
-    loadAll()
-    const timer = setInterval(loadState, pollMs)
-    return () => clearInterval(timer)
+    let isActive = true
+
+    async function refresh() {
+      try {
+        await loadData()
+      } catch {
+        if (isActive) {
+          setHasLoadError(true)
+        }
+      }
+    }
+
+    refresh()
+    const intervalId = window.setInterval(refresh, 1000)
+
+    return () => {
+      isActive = false
+      window.clearInterval(intervalId)
+    }
   }, [])
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    try {
       window.localStorage.setItem('medsense-theme', theme)
+    } catch {
+      // Ignore local storage errors.
     }
   }, [theme])
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('medsense-language', language)
+    if (language !== activeLanguage) {
+      setLanguage(activeLanguage)
+      return
     }
-  }, [language])
 
-  async function loadAll() {
-    const [configRes, patientsRes, stateRes] = await Promise.all([
-      fetch('/api/config'),
-      fetch('/api/patients'),
-      fetch('/api/state')
-    ])
+    try {
+      window.localStorage.setItem('medsense-language', activeLanguage)
+    } catch {
+      // Ignore local storage errors.
+    }
+  }, [activeLanguage, language])
 
-    const configData = await configRes.json()
-    const patientsData = await patientsRes.json()
-    const stateData = await stateRes.json()
+  const selectedPatient = patients.find((patient) => patient.id === selectedPatientId) || patients[0] || null
+  const selectedNodeState = selectedPatient ? nodeStates[String(selectedPatient.nodeId)] || null : null
+  const targetRange = formatTargetRange(selectedPatient)
+  const breathingState = bpmStatus(
+    selectedNodeState?.breathsPerMinute,
+    selectedPatient?.referenceMinBpm,
+    selectedPatient?.referenceMaxBpm
+  )
+  const temperatureState = selectedNodeState?.temperatureState || 'normal'
+  const gaugeColor = {
+    normal: '#22c55e',
+    warning: '#f59e0b',
+    alarm: '#ef4444'
+  }[breathingState]
+  const maxBpm = Number(selectedPatient?.referenceMaxBpm) || 1
+  const currentBpm = Number(selectedNodeState?.breathsPerMinute)
+  const gaugeFill = clamp(Math.round(((Number.isFinite(currentBpm) ? currentBpm : 0) / maxBpm) * 100), 0, 100)
+  const gaugeStyle = {
+    background: `conic-gradient(${gaugeColor} 0 ${gaugeFill}%, rgba(148, 163, 184, 0.18) ${gaugeFill}% 100%)`
+  }
+  const freshnessLabel = !selectedNodeState?.lastSeenEpochMs
+    ? t.waiting
+    : selectedNodeState.online
+      ? t.fresh
+      : t.stale
+  const sourceLabel = !selectedNodeState?.lastSeenEpochMs
+    ? t.sourceWaiting
+    : selectedNodeState.source === 'stale'
+      ? t.stale
+      : t.sourceGateway
+  const lastUpdateLabel = selectedNodeState?.lastSeenEpochMs
+    ? new Date(selectedNodeState.lastSeenEpochMs).toLocaleTimeString(locale, {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
+    : '--'
+  const ageGroupLabel = selectedPatient ? t[ageBandKey(selectedPatient.age)] || selectedPatient.groupLabel || '--' : '--'
 
-    setConfig(configData)
-    setPatients(patientsData.patients || [])
-    setState(stateData)
+  async function handleSelectPatient(patientId) {
+    setSelectedPatientId(patientId)
+
+    try {
+      await fetchJson('/api/select-patient', {
+        method: 'POST',
+        body: JSON.stringify({ patientId })
+      })
+      await loadData()
+    } catch {
+      setHasLoadError(true)
+    }
   }
 
-  async function loadState() {
-    const response = await fetch('/api/state')
-    const data = await response.json()
-    setState(data)
-  }
-
-  async function reloadPatients() {
-    const response = await fetch('/api/patients')
-    const data = await response.json()
-    setPatients(data.patients || [])
-    return data
-  }
-
-  async function selectPatient(patientId) {
-    await fetch('/api/select-patient', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ patientId })
+  function openCreateForm() {
+    setFormError('')
+    setFormState({
+      id: null,
+      patientName: '',
+      age: ''
     })
-    await loadState()
+    setIsFormOpen(true)
   }
 
-  function recommendedTarget(ageValue) {
-    const age = Number(ageValue)
-    if (!config || !Number.isFinite(age)) return ''
-    const band = config.ageGroups.find((group) => age >= group.minAge && age <= group.maxAge) || config.ageGroups[0]
-    return String(Math.round((band.minBpm + band.maxBpm) / 2))
-  }
+  function openEditForm() {
+    if (!selectedPatient) {
+      return
+    }
 
-  function openAddPatient() {
-    setFormMode('add')
-    setForm(emptyForm())
-    setShowForm(true)
-  }
-
-  function openEditPatient() {
-    const selectedPatient = patients.find((patient) => patient.id === state?.selectedPatientId)
-    if (!selectedPatient) return
-
-    setFormMode('edit')
-    setForm({
+    setFormError('')
+    setFormState({
       id: selectedPatient.id,
       patientName: selectedPatient.patientName,
-      age: String(selectedPatient.age),
-      targetBpm: String(selectedPatient.targetBpm)
+      age: String(selectedPatient.age)
     })
-    setShowForm(true)
+    setIsFormOpen(true)
   }
 
-  function updateAge(ageValue) {
-    setForm((currentForm) => ({
-      ...currentForm,
-      age: ageValue,
-      targetBpm: formMode === 'add' ? recommendedTarget(ageValue) : currentForm.targetBpm
-    }))
-  }
-
-  async function submitPatient(event) {
+  async function handleSubmit(event) {
     event.preventDefault()
+    setIsSaving(true)
+    setFormError('')
 
-    const payload = {
-      patientName: form.patientName,
-      age: Number(form.age),
-      targetBpm: Number(form.targetBpm)
-    }
-
-    const url = formMode === 'edit' ? `/api/patients/${form.id}` : '/api/patients'
-    const method = formMode === 'edit' ? 'PUT' : 'POST'
-
-    await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-
-    setForm(emptyForm())
-    setShowForm(false)
-
-    const patientsData = await reloadPatients()
-    const nextPatients = patientsData.patients || []
-
-    if (formMode === 'add') {
-      const newestPatient = nextPatients[nextPatients.length - 1]
-      if (newestPatient) {
-        await selectPatient(newestPatient.id)
+    try {
+      const payload = {
+        patientName: formState.patientName.trim(),
+        age: Number(formState.age)
       }
-    } else if (form.id) {
-      await selectPatient(form.id)
-    }
 
-    await loadState()
+      const result = formState.id
+        ? await fetchJson(`/api/patients/${formState.id}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload)
+          })
+        : await fetchJson('/api/patients', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+          })
+
+      if (!formState.id && result?.id) {
+        await fetchJson('/api/select-patient', {
+          method: 'POST',
+          body: JSON.stringify({ patientId: result.id })
+        })
+      }
+
+      setIsFormOpen(false)
+      await loadData()
+    } catch {
+      setFormError(t.saveError)
+    } finally {
+      setIsSaving(false)
+    }
   }
-
-  const messages = translations[language] || translations.en
-  const selectedLocale = languageOptions.find((option) => option.key === language)?.locale || 'en-US'
-  const t = (key, values) => formatMessage(messages[key] || translations.en[key] || key, values)
-
-  const selectedPatient = useMemo(() => {
-    if (!patients.length) return null
-    return patients.find((patient) => patient.id === state?.selectedPatientId) || patients[0] || null
-  }, [patients, state?.selectedPatientId])
-
-  const selectedNodeState = useMemo(() => {
-    if (!selectedPatient || !state?.nodeStates) return null
-    return state.nodeStates[String(selectedPatient.nodeId)] || null
-  }, [selectedPatient, state])
-
-  const current = useMemo(() => {
-    if (!selectedPatient) return null
-
-    if (!selectedNodeState) {
-      return {
-        ...selectedPatient,
-        online: false,
-        latencyMs: '--',
-        breathsPerMinute: '--',
-        breathingLevel: 0,
-        temperatureC: null,
-        temperatureState: 'normal',
-        source: t('waitingSource'),
-        lastSeenEpochMs: 0
-      }
-    }
-
-    return {
-      ...selectedPatient,
-      ...selectedNodeState
-    }
-  }, [selectedPatient, selectedNodeState, t])
-
-  const currentBpmStatus = current ? bpmStatus(current.breathsPerMinute, current.targetBpm) : 'normal'
-  const breathingHeight = current ? clamp(Number(current.breathingLevel), 0, 100) : 0
-  const bpmPercent = current
-    ? clamp((Number(current.breathsPerMinute) / Math.max(Number(current.targetBpm) + 10, 1)) * 100, 0, 100)
-    : 0
-  const lastUpdatedAt = current?.lastSeenEpochMs
-    ? new Date(current.lastSeenEpochMs).toLocaleString(selectedLocale)
-    : '--'
 
   return (
-    <div className={`app ${theme}`}>
+    <div className={`app ${theme === 'light' ? 'light' : ''}`}>
       <header className="topbar">
         <div>
-          <div className="eyebrow">{t('appTitle')}</div>
-          <h1>{current?.patientName || t('noPatientSelected')}</h1>
+          <div className="eyebrow">{t.eyebrow}</div>
+          <h1>{selectedPatient ? selectedPatient.patientName : t.title}</h1>
           <div className="subtle">
-            {current
-              ? t('headerMeta', {
-                nodeId: current.nodeId,
-                age: current.age,
-                targetBpm: current.targetBpm
-              })
-              : t('noPatientsAvailable')}
+            {selectedPatient
+              ? applyTemplate(t.headerMeta, {
+                  nodeId: selectedPatient.nodeId,
+                  age: selectedPatient.age,
+                  targetRange
+                })
+              : t.subtitle}
           </div>
+          {hasLoadError ? <div className="subtle">{t.loadError}</div> : null}
         </div>
 
         <div className="topbar-actions">
+          <button
+            type="button"
+            className="mode-btn"
+            onClick={() => setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'))}
+          >
+            {theme === 'dark' ? t.lightMode : t.darkMode}
+          </button>
+
           <div className="language-toggle" aria-label="Language toggle">
-            {languageOptions.map((option) => (
+            {availableLanguages.map((code) => (
               <button
-                key={option.key}
-                className={`toggle-chip ${language === option.key ? 'active' : ''}`}
-                onClick={() => setLanguage(option.key)}
+                key={code}
+                type="button"
+                className={`toggle-chip ${activeLanguage === code ? 'active' : ''}`}
+                onClick={() => setLanguage(code)}
               >
-                {option.label}
+                {code.toUpperCase()}
               </button>
             ))}
           </div>
-          <button className="mode-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-            {theme === 'dark' ? t('lightMode') : t('darkMode')}
-          </button>
         </div>
       </header>
 
       <main className="dashboard">
         <section className="card temp-card">
-          <div className="section-title">{t('temperature')}</div>
-          <div className={`temp-value ${current?.temperatureState || 'normal'}`}>{formatTemp(current?.temperatureC)} deg C</div>
-          <div className="subtle">{t('normalTemp')}</div>
+          <div className="section-title">{t.temperature}</div>
+          <div className={`temp-value ${temperatureState}`}>
+            {Number.isFinite(Number(selectedNodeState?.temperatureC))
+              ? `${Number(selectedNodeState.temperatureC).toFixed(1)} °C`
+              : '--'}
+          </div>
+          <div className="subtle">{t.normalTemp}</div>
+          <div className="status-grid">
+            <div>
+              <div className="label">{t.source}</div>
+              <div className="metric">{sourceLabel}</div>
+            </div>
+            <div>
+              <div className="label">{t.freshness}</div>
+              <div className="metric">{freshnessLabel}</div>
+            </div>
+          </div>
         </section>
 
         <section className="center-panel">
-          <div className="card breathing-card">
-            <div className="section-title">{t('breathingCycle')}</div>
+          <article className="card breathing-card">
+            <div className="section-title">{t.breathing}</div>
             <div className="breathing-wrap">
               <div className="breathing-bar-shell">
-                <div className="breathing-bar-fill" style={{ height: `${breathingHeight}%` }} />
+                <div
+                  className="breathing-bar-fill"
+                  style={{
+                    height: `${gaugeFill}%`,
+                    background: `linear-gradient(180deg, ${gaugeColor}, rgba(14, 165, 233, 0.45))`
+                  }}
+                />
               </div>
+
+              <div>
+                <div className="label">{t.breathingRate}</div>
+                <div className="metric">{Number.isFinite(currentBpm) ? currentBpm : '--'}</div>
+              </div>
+
               <div className="breathing-scale">
-                <span>{t('inhale')}</span>
-                <span>{t('exhale')}</span>
+                <span>{Number(selectedPatient?.referenceMaxBpm) || '--'}</span>
+                <span>
+                  {selectedPatient
+                    ? Math.round(
+                        (Number(selectedPatient.referenceMinBpm) + Number(selectedPatient.referenceMaxBpm)) / 2
+                      )
+                    : '--'}
+                </span>
+                <span>{Number(selectedPatient?.referenceMinBpm) || '--'}</span>
               </div>
             </div>
-          </div>
+          </article>
 
-          <div className="card gauge-card">
-            <div className="section-title">{t('breathsPerMinute')}</div>
+          <article className="card gauge-card">
+            <div className="section-title">{t.targetRange}</div>
             <div className="gauge-shell">
-              <div
-                className="gauge-ring"
-                style={{
-                  background: `conic-gradient(${currentBpmStatus === 'alarm' ? '#ef4444' : currentBpmStatus === 'warning' ? '#f59e0b' : '#22c55e'} 0 ${bpmPercent}%, rgba(148,163,184,0.15) ${bpmPercent}% 100%)`
-                }}
-              >
+              <div className="gauge-ring" style={gaugeStyle}>
                 <div className="gauge-inner">
-                  <div className="gauge-value">{current?.breathsPerMinute ?? '--'}</div>
-                  <div className="subtle">
-                    {current ? t('targetBpmLabel', { targetBpm: current.targetBpm }) : '--'}
+                  <div>
+                    <div className="gauge-value">{Number.isFinite(currentBpm) ? currentBpm : '--'}</div>
+                    <div className="subtle">
+                      {applyTemplate(t.gaugeTarget, {
+                        targetRange
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          </article>
         </section>
 
         <section className="card status-card">
-          <div className="section-title">{t('nodeStatus')}</div>
+          <div className="section-title">{t.status}</div>
+          <div className={`status-pill ${selectedNodeState?.online ? 'online' : 'offline'}`}>
+            {selectedNodeState?.online ? t.online : selectedNodeState ? t.offline : t.waiting}
+          </div>
+
           <div className="status-grid">
             <div>
-              <div className={`status-pill ${current?.online ? 'online' : 'offline'}`}>{current?.online ? t('online') : t('offline')}</div>
+              <div className="label">{t.targetRange}</div>
+              <div className="metric">{targetRange} bpm</div>
             </div>
             <div>
-              <div className="label">{t('node')}</div>
-              <div className="metric">{current?.nodeId ?? '--'}</div>
+              <div className="label">{t.lastUpdate}</div>
+              <div className="metric">{lastUpdateLabel}</div>
             </div>
             <div>
-              <div className="label">{t('latency')}</div>
-              <div className="metric">{current?.latencyMs ?? '--'} ms</div>
+              <div className="label">{t.age}</div>
+              <div className="metric">{selectedPatient ? `${selectedPatient.age} ${t.years}` : '--'}</div>
             </div>
             <div>
-              <div className="label">{t('source')}</div>
-              <div className="metric">{current?.source || '--'}</div>
+              <div className="label">{t.ageGroup}</div>
+              <div className="metric">{ageGroupLabel}</div>
             </div>
-            <div>
-              <div className="label">{t('lastUpdate')}</div>
-              <div className="metric">{lastUpdatedAt}</div>
-            </div>
-            <div>
-              <div className="label">{t('targetBpm')}</div>
-              <div className="metric">{current?.targetBpm ?? '--'}</div>
-            </div>
+          </div>
+
+          <div className="subtle" style={{ marginTop: '1rem' }}>
+            {selectedNodeState?.lastSeenEpochMs ? null : t.waitingSensor}
           </div>
         </section>
       </main>
 
-      <footer className="patients-panel card">
+      <section className="patients-panel">
         <div className="patients-header">
           <div>
-            <div className="section-title">{t('patientsNodes')}</div>
-            <div className="subtle">{t('patientCount', { count: patients.length })}</div>
+            <div className="section-title">{t.patients}</div>
+            <div className="subtle">{t.targetHint}</div>
           </div>
+
           <div className="topbar-actions">
-            {selectedPatient && (
-              <button className="mode-btn" onClick={openEditPatient}>{t('editPatient')}</button>
-            )}
-            <button className="add-btn" onClick={openAddPatient}>{t('addPatient')}</button>
+            {selectedPatient ? (
+              <button type="button" className="mode-btn" onClick={openEditForm}>
+                {t.editPatient}
+              </button>
+            ) : null}
+            <button type="button" className="add-btn" onClick={openCreateForm}>
+              {t.addPatient}
+            </button>
           </div>
         </div>
 
-        {patients.length > 0 ? (
+        {patients.length ? (
           <div className="patient-tabs">
-            {patients.map((patient) => (
+            {patients.map((patient, index) => (
               <button
                 key={patient.id}
-                className={`patient-tab ${state?.selectedPatientId === patient.id ? 'active' : ''}`}
-                onClick={() => selectPatient(patient.id)}
+                type="button"
+                className={`patient-tab ${selectedPatient?.id === patient.id ? 'active' : ''}`}
+                onClick={() => handleSelectPatient(patient.id)}
               >
-                <span className="patient-index">{patient.nodeId}</span>
-                <span className="patient-tab-copy">
-                  <span className="patient-name">{patient.patientName}</span>
-                  <span className="patient-meta">{patient.age}y · {patient.targetBpm} bpm</span>
-                </span>
+                <div className="patient-index">{index + 1}</div>
+                <div className="patient-tab-copy">
+                  <div className="patient-name">{patient.patientName}</div>
+                  <div className="patient-meta">
+                    {applyTemplate(t.patientMeta, {
+                      age: patient.age,
+                      targetRange: formatTargetRange(patient)
+                    })}
+                  </div>
+                </div>
               </button>
             ))}
           </div>
         ) : (
-          <div className="empty-state">{t('noPatientsYet')}</div>
+          <div className="empty-state">{t.noPatients}</div>
         )}
-      </footer>
+      </section>
 
-      {showForm && (
-        <div className="modal-backdrop" onClick={() => setShowForm(false)}>
-          <div className="modal" onClick={(event) => event.stopPropagation()}>
-            <h2>{formMode === 'edit' ? t('editPatientTitle') : t('addPatientTitle')}</h2>
-            <form onSubmit={submitPatient} className="patient-form">
+      {isFormOpen ? (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <h2>{formState.id ? t.editPatient : t.createPatient}</h2>
+
+            <form className="patient-form" onSubmit={handleSubmit}>
               <label>
-                {t('patientName')}
+                <span>{t.patientName}</span>
                 <input
-                  value={form.patientName}
-                  onChange={(event) => setForm({ ...form, patientName: event.target.value })}
+                  value={formState.patientName}
+                  onChange={(event) =>
+                    setFormState((currentState) => ({
+                      ...currentState,
+                      patientName: event.target.value
+                    }))
+                  }
+                  placeholder={t.patientName}
                   required
                 />
               </label>
+
               <label>
-                {t('age')}
+                <span>{t.age}</span>
                 <input
                   type="number"
                   min="0"
                   max="120"
-                  value={form.age}
-                  onChange={(event) => updateAge(event.target.value)}
+                  step="1"
+                  value={formState.age}
+                  onChange={(event) =>
+                    setFormState((currentState) => ({
+                      ...currentState,
+                      age: event.target.value
+                    }))
+                  }
+                  placeholder="0"
                   required
                 />
               </label>
-              <label>
-                {t('targetBpm')}
-                <input
-                  type="number"
-                  min="1"
-                  max="120"
-                  value={form.targetBpm}
-                  onChange={(event) => setForm({ ...form, targetBpm: event.target.value })}
-                  required
-                />
-              </label>
-              <div className="subtle">{t('targetHint')}</div>
+
+              <div className="subtle">{t.targetHint}</div>
+              {formError ? <div className="subtle">{formError}</div> : null}
+
               <div className="form-actions">
-                <button type="button" className="mode-btn" onClick={() => setShowForm(false)}>{t('cancel')}</button>
-                <button type="submit" className="mode-btn active">{formMode === 'edit' ? t('save') : t('submit')}</button>
+                <button type="button" className="mode-btn" onClick={() => setIsFormOpen(false)}>
+                  {t.cancel}
+                </button>
+                <button type="submit" className="add-btn" disabled={isSaving}>
+                  {formState.id ? t.saveChanges : t.createPatient}
+                </button>
               </div>
             </form>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
-
-export default App

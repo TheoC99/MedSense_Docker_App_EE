@@ -290,7 +290,7 @@ app.post('/api/patients', (req, res) => {
     return res.status(400).json({ error: 'age must be between 0 and 120' })
   }
 
-  if (requestedTargetBpm !== undefined && (!Number.isFinite(Number(requestedTargetBpm)) || Number(requestedTargetBpm) < 1 || Number(requestedTargetBpm) > 120)) {
+  if (requestedTargetBpm !== undefined && requestedTargetBpm !== null && requestedTargetBpm !== '' && (!Number.isFinite(Number(requestedTargetBpm)) || Number(requestedTargetBpm) < 1 || Number(requestedTargetBpm) > 120)) {
     return res.status(400).json({ error: 'targetBpm must be between 1 and 120' })
   }
 
@@ -323,7 +323,7 @@ app.put('/api/patients/:id', (req, res) => {
   const patientId = String(req.params.id || '')
   const patientName = String(req.body?.patientName || '').trim()
   const age = Number(req.body?.age)
-  const targetBpm = Number(req.body?.targetBpm)
+  const requestedTargetBpm = req.body?.targetBpm
 
   if (!patientName) {
     return res.status(400).json({ error: 'patientName is required' })
@@ -333,7 +333,7 @@ app.put('/api/patients/:id', (req, res) => {
     return res.status(400).json({ error: 'age must be between 0 and 120' })
   }
 
-  if (!Number.isFinite(targetBpm) || targetBpm < 1 || targetBpm > 120) {
+  if (requestedTargetBpm !== undefined && requestedTargetBpm !== null && requestedTargetBpm !== '' && (!Number.isFinite(Number(requestedTargetBpm)) || Number(requestedTargetBpm) < 1 || Number(requestedTargetBpm) > 120)) {
     return res.status(400).json({ error: 'targetBpm must be between 1 and 120' })
   }
 
@@ -350,7 +350,7 @@ app.put('/api/patients/:id', (req, res) => {
       ...existingPatient,
       patientName,
       age,
-      targetBpm,
+      targetBpm: requestedTargetBpm,
       updatedAt: new Date().toISOString()
     },
     existingPatient.nodeId
