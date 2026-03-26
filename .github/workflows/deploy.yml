@@ -7,9 +7,15 @@ on:
 
 jobs:
   deploy:
-    runs-on: [self-hosted, Linux, X64, delta]
+    runs-on: self-hosted
 
     steps:
+      - name: Show runner info
+        run: |
+          whoami
+          hostname
+          pwd
+
       - name: Deploy on delta
         run: |
           cd /srv/stacks/MedSense_Docker_App_EE
