@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 48">
+  <defs>
+    <clipPath id="flag-nl-clip">
+      <rect x="1" y="1" width="62" height="46" rx="8" ry="8" />
+    </clipPath>
+  </defs>
+  <g clip-path="url(#flag-nl-clip)">
+    <rect width="64" height="16" y="0" fill="#ae1c28" />
+    <rect width="64" height="16" y="16" fill="#fff" />
+    <rect width="64" height="16" y="32" fill="#21468b" />
+  </g>
+  <rect x="1" y="1" width="62" height="46" rx="8" ry="8" fill="none" stroke="rgba(15,23,42,0.2)" stroke-width="2" />
+</svg>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const fallbackLanguages = ['en', 'nl', 'ja']
 const localeByLanguage = {
@@ -6,6 +6,11 @@ const localeByLanguage = {
   nl: 'nl-NL',
   ja: 'ja-JP'
 }
+const languageOptions = [
+  { key: 'nl', icon: '/icons/languages/nl.svg' },
+  { key: 'en', icon: '/icons/languages/en.svg' },
+  { key: 'ja', icon: '/icons/languages/ja.svg' }
+]
 
 const translations = {
   en: {
@@ -14,6 +19,10 @@ const translations = {
     subtitle: 'Patient-linked node overview',
     lightMode: 'White mode',
     darkMode: 'Black mode',
+    languageMenu: 'Language menu',
+    languageDutch: 'Dutch',
+    languageEnglish: 'English',
+    languageJapanese: 'Japanese',
     patients: 'Patients',
     addPatient: 'Add patient',
     editPatient: 'Edit patient',
@@ -63,6 +72,10 @@ const translations = {
     subtitle: 'Node-overzicht gekoppeld aan patienten',
     lightMode: 'Witte modus',
     darkMode: 'Zwarte modus',
+    languageMenu: 'Taalmenu',
+    languageDutch: 'Nederlands',
+    languageEnglish: 'Engels',
+    languageJapanese: 'Japans',
     patients: 'Patienten',
     addPatient: 'Patient toevoegen',
     editPatient: 'Patient bewerken',
@@ -112,6 +125,10 @@ const translations = {
     subtitle: '患者に紐づくノード概要',
     lightMode: '白表示',
     darkMode: '黒表示',
+    languageMenu: '言語メニュー',
+    languageDutch: 'オランダ語',
+    languageEnglish: '英語',
+    languageJapanese: '日本語',
     patients: '患者一覧',
     addPatient: '患者を追加',
     editPatient: '患者を編集',
@@ -214,6 +231,7 @@ async function fetchJson(url, options = {}) {
 export default function App() {
   const [theme, setTheme] = useState(() => readStoredValue('medsense-theme', 'dark'))
   const [language, setLanguage] = useState(() => readStoredValue('medsense-language', 'en'))
+  const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false)
   const [configLanguages, setConfigLanguages] = useState(fallbackLanguages)
   const [patients, setPatients] = useState([])
   const [nodeStates, setNodeStates] = useState({})
@@ -227,11 +245,21 @@ export default function App() {
     patientName: '',
     age: ''
   })
+  const languageMenuRef = useRef(null)
 
-  const availableLanguages = configLanguages.filter((code) => translations[code]) || fallbackLanguages
-  const activeLanguage = availableLanguages.includes(language) ? language : availableLanguages[0] || 'en'
+  const configuredLanguageOptions = languageOptions.filter((option) => configLanguages.includes(option.key) && translations[option.key])
+  const availableLanguages = configuredLanguageOptions.length
+    ? configuredLanguageOptions
+    : languageOptions.filter((option) => translations[option.key])
+  const fallbackLanguageKey = availableLanguages[0]?.key || 'en'
+  const activeLanguage = availableLanguages.some((option) => option.key === language) ? language : fallbackLanguageKey
   const t = translations[activeLanguage]
   const locale = localeByLanguage[activeLanguage] || localeByLanguage.en
+  const languageLabelByKey = {
+    nl: t.languageDutch,
+    en: t.languageEnglish,
+    ja: t.languageJapanese
+  }
 
   async function loadData() {
     const [configData, patientData, stateData] = await Promise.all([
@@ -296,6 +324,32 @@ export default function App() {
       // Ignore local storage errors.
     }
   }, [activeLanguage, language])
+
+  useEffect(() => {
+    if (!isLanguageMenuOpen) {
+      return undefined
+    }
+
+    function handlePointerDown(event) {
+      if (languageMenuRef.current && !languageMenuRef.current.contains(event.target)) {
+        setIsLanguageMenuOpen(false)
+      }
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        setIsLanguageMenuOpen(false)
+      }
+    }
+
+    window.addEventListener('mousedown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isLanguageMenuOpen])
 
   const selectedPatient = patients.find((patient) => patient.id === selectedPatientId) || patients[0] || null
   const selectedNodeState = selectedPatient ? nodeStates[String(selectedPatient.nodeId)] || null : null
@@ -461,17 +515,39 @@ export default function App() {
             {theme === 'dark' ? t.lightMode : t.darkMode}
           </button>
 
-          <div className="language-toggle" aria-label="Language toggle">
-            {availableLanguages.map((code) => (
-              <button
-                key={code}
-                type="button"
-                className={`toggle-chip ${activeLanguage === code ? 'active' : ''}`}
-                onClick={() => setLanguage(code)}
-              >
-                {code.toUpperCase()}
-              </button>
-            ))}
+          <div className="language-toggle" ref={languageMenuRef}>
+            <button
+              type="button"
+              className={`icon-btn language-trigger ${isLanguageMenuOpen ? 'active' : ''}`}
+              aria-label={t.languageMenu}
+              aria-haspopup="menu"
+              aria-expanded={isLanguageMenuOpen}
+              onClick={() => setIsLanguageMenuOpen((currentState) => !currentState)}
+            >
+              <img src="/icons/languages/translate.svg" alt="" className="icon-image" />
+            </button>
+
+            {isLanguageMenuOpen ? (
+              <div className="language-popover" role="menu" aria-label={t.languageMenu}>
+                {availableLanguages.map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={activeLanguage === option.key}
+                    aria-label={languageLabelByKey[option.key]}
+                    title={languageLabelByKey[option.key]}
+                    className={`language-option ${activeLanguage === option.key ? 'active' : ''}`}
+                    onClick={() => {
+                      setLanguage(option.key)
+                      setIsLanguageMenuOpen(false)
+                    }}
+                  >
+                    <img src={option.icon} alt="" className="flag-icon" />
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
       </header>
