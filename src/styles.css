@@ -160,12 +160,6 @@ h1 {
   display: block;
 }
 
-.action-glyph {
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-}
-
 .mono-icon {
   filter: none;
 }
