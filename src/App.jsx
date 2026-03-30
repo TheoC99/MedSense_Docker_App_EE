@@ -11,6 +11,17 @@ const languageOptions = [
   { key: 'en', icon: '/icons/languages/en.svg' },
   { key: 'ja', icon: '/icons/languages/ja.svg' }
 ]
+const fallbackTemperatureRange = {
+  minC: 36.5,
+  maxC: 37.5
+}
+const fallbackAgeGroups = [
+  { key: 'adult', minAge: 18, maxAge: 120, minBpm: 12, maxBpm: 20, label: 'Adult' },
+  { key: 'school', minAge: 6, maxAge: 17, minBpm: 16, maxBpm: 30, label: 'School-age child' },
+  { key: 'preschool', minAge: 3, maxAge: 5, minBpm: 22, maxBpm: 34, label: 'Preschooler' },
+  { key: 'toddler', minAge: 1, maxAge: 2, minBpm: 24, maxBpm: 40, label: 'Toddler' },
+  { key: 'infant', minAge: 0, maxAge: 0, minBpm: 30, maxBpm: 60, label: 'Infant' }
+]
 
 const translations = {
   en: {
@@ -26,6 +37,7 @@ const translations = {
     patients: 'Patients',
     addPatient: 'Add patient',
     editPatient: 'Edit patient',
+    deletePatient: 'Delete patient',
     createPatient: 'Create patient',
     saveChanges: 'Save changes',
     cancel: 'Cancel',
@@ -39,13 +51,18 @@ const translations = {
     bandToddler: 'Toddler',
     bandInfant: 'Infant',
     temperature: 'Temperature',
-    normalTemp: 'Normal 36.5-37.5 \u00B0C',
+    normalTemp: 'Normal {range} \u00B0C',
+    tempRange: 'Temperature range',
+    tempMin: 'Temp min (\u00B0C)',
+    tempMax: 'Temp max (\u00B0C)',
     breathingCycle: 'Breathing cycle',
     inhale: 'Inhale',
     exhale: 'Exhale',
     breathing: 'Breathing',
     breathingRate: 'Breaths per minute',
     targetRange: 'Target range',
+    targetMinBpm: 'Target min (bpm)',
+    targetMaxBpm: 'Target max (bpm)',
     gaugeTarget: 'target {targetRange} bpm',
     status: 'Status',
     source: 'Source',
@@ -60,9 +77,11 @@ const translations = {
     offline: 'Offline',
     noPatients: 'No patients yet. Create the first patient to link incoming node data.',
     waitingSensor: 'Waiting for node data',
-    targetHint: 'Target range is filled automatically from age.',
+    targetHint: 'Ranges are filled from age at creation and stay editable afterwards.',
     loadError: 'Could not load data.',
     saveError: 'Could not save patient.',
+    deleteError: 'Could not delete patient.',
+    deletePatientConfirm: 'Delete patient {patientName}?',
     headerMeta: 'Node {nodeId} | {age} years | target {targetRange} bpm',
     patientMeta: '{age} years | target {targetRange} bpm'
   },
@@ -79,6 +98,7 @@ const translations = {
     patients: 'Patienten',
     addPatient: 'Patient toevoegen',
     editPatient: 'Patient bewerken',
+    deletePatient: 'Patient verwijderen',
     createPatient: 'Patient aanmaken',
     saveChanges: 'Wijzigingen opslaan',
     cancel: 'Annuleren',
@@ -92,13 +112,18 @@ const translations = {
     bandToddler: 'Dreumes',
     bandInfant: 'Baby',
     temperature: 'Temperatuur',
-    normalTemp: 'Normaal 36.5-37.5 \u00B0C',
+    normalTemp: 'Normaal {range} \u00B0C',
+    tempRange: 'Temperatuurbereik',
+    tempMin: 'Temp min (\u00B0C)',
+    tempMax: 'Temp max (\u00B0C)',
     breathingCycle: 'Ademcyclus',
     inhale: 'Inademen',
     exhale: 'Uitademen',
     breathing: 'Ademhaling',
     breathingRate: 'Ademhalingen per minuut',
     targetRange: 'Doelbereik',
+    targetMinBpm: 'Doel min (bpm)',
+    targetMaxBpm: 'Doel max (bpm)',
     gaugeTarget: 'doel {targetRange} bpm',
     status: 'Status',
     source: 'Bron',
@@ -113,9 +138,11 @@ const translations = {
     offline: 'Offline',
     noPatients: 'Nog geen patienten. Maak de eerste patient aan om inkomende nodedata te koppelen.',
     waitingSensor: 'Wachten op nodegegevens',
-    targetHint: 'Het doelbereik wordt automatisch op basis van leeftijd ingevuld.',
+    targetHint: 'Bereiken worden bij aanmaak automatisch op basis van leeftijd ingevuld en blijven daarna aanpasbaar.',
     loadError: 'Gegevens konden niet worden geladen.',
     saveError: 'Patient kon niet worden opgeslagen.',
+    deleteError: 'Patient kon niet worden verwijderd.',
+    deletePatientConfirm: 'Patient {patientName} verwijderen?',
     headerMeta: 'Node {nodeId} | {age} jaar | doel {targetRange} bpm',
     patientMeta: '{age} jaar | doel {targetRange} bpm'
   },
@@ -174,6 +201,13 @@ const translations = {
   }
 }
 
+translations.ja = {
+  ...translations.en,
+  ...translations.ja,
+  normalTemp: 'Normal {range} \u00B0C',
+  targetHint: 'Ranges are filled from age at creation and stay editable afterwards.'
+}
+
 function readStoredValue(key, fallback) {
   try {
     return window.localStorage.getItem(key) || fallback
@@ -197,6 +231,54 @@ function formatTargetRange(patient) {
     return '--'
   }
   return `${min}-${max}`
+}
+
+function formatTemperatureRange(patient) {
+  const min = Number(patient?.normalTempMinC)
+  const max = Number(patient?.normalTempMaxC)
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return '--'
+  }
+  return `${min.toFixed(1)}-${max.toFixed(1)}`
+}
+
+function createEmptyFormState() {
+  return {
+    id: null,
+    patientName: '',
+    age: '',
+    referenceMinBpm: '',
+    referenceMaxBpm: '',
+    normalTempMinC: '',
+    normalTempMaxC: ''
+  }
+}
+
+function getDefaultTargetRange(age, ageGroups) {
+  const value = Number(age)
+  if (!Number.isFinite(value)) {
+    return { minBpm: '', maxBpm: '' }
+  }
+
+  const band = ageGroups.find((group) => value >= Number(group.minAge) && value <= Number(group.maxAge))
+  if (!band) {
+    return { minBpm: '', maxBpm: '' }
+  }
+
+  return {
+    minBpm: String(Math.round(Number(band.minBpm))),
+    maxBpm: String(Math.round(Number(band.maxBpm)))
+  }
+}
+
+function getDefaultTemperatureValues(defaultTemperatureRange) {
+  const minC = Number(defaultTemperatureRange?.minC)
+  const maxC = Number(defaultTemperatureRange?.maxC)
+
+  return {
+    minC: Number.isFinite(minC) ? minC.toFixed(1) : fallbackTemperatureRange.minC.toFixed(1),
+    maxC: Number.isFinite(maxC) ? maxC.toFixed(1) : fallbackTemperatureRange.maxC.toFixed(1)
+  }
 }
 
 function ageBandKey(age) {
@@ -233,17 +315,21 @@ export default function App() {
   const [language, setLanguage] = useState(() => readStoredValue('medsense-language', 'en'))
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false)
   const [configLanguages, setConfigLanguages] = useState(fallbackLanguages)
+  const [ageGroups, setAgeGroups] = useState(fallbackAgeGroups)
+  const [defaultTempRange, setDefaultTempRange] = useState(fallbackTemperatureRange)
   const [patients, setPatients] = useState([])
   const [nodeStates, setNodeStates] = useState({})
   const [selectedPatientId, setSelectedPatientId] = useState(null)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [hasLoadError, setHasLoadError] = useState(false)
+  const [actionError, setActionError] = useState('')
   const [formError, setFormError] = useState('')
-  const [formState, setFormState] = useState({
-    id: null,
-    patientName: '',
-    age: ''
+  const [formState, setFormState] = useState(() => createEmptyFormState())
+  const [autoFillState, setAutoFillState] = useState({
+    targetRange: true,
+    tempRange: true
   })
   const languageMenuRef = useRef(null)
 
@@ -269,6 +355,12 @@ export default function App() {
     ])
 
     setConfigLanguages(Array.isArray(configData?.languages) ? configData.languages : fallbackLanguages)
+    setAgeGroups(Array.isArray(configData?.ageGroups) ? configData.ageGroups : fallbackAgeGroups)
+    setDefaultTempRange(
+      configData?.defaultTemperatureRange && typeof configData.defaultTemperatureRange === 'object'
+        ? configData.defaultTemperatureRange
+        : fallbackTemperatureRange
+    )
     setPatients(Array.isArray(patientData?.patients) ? patientData.patients : [])
     setNodeStates(stateData?.nodeStates && typeof stateData.nodeStates === 'object' ? stateData.nodeStates : {})
 
@@ -280,6 +372,7 @@ export default function App() {
 
     setSelectedPatientId(nextSelectedId)
     setHasLoadError(false)
+    setActionError('')
   }
 
   useEffect(() => {
@@ -354,6 +447,7 @@ export default function App() {
   const selectedPatient = patients.find((patient) => patient.id === selectedPatientId) || patients[0] || null
   const selectedNodeState = selectedPatient ? nodeStates[String(selectedPatient.nodeId)] || null : null
   const targetRange = formatTargetRange(selectedPatient)
+  const normalTemperatureRange = formatTemperatureRange(selectedPatient)
   const temperatureState = selectedNodeState?.temperatureState || 'normal'
   const currentBreathingLevel = clamp(Number(selectedNodeState?.breathingLevel) || 0, 0, 100)
   const minTargetBpm = Number(selectedPatient?.referenceMinBpm)
@@ -414,6 +508,7 @@ export default function App() {
   const ageGroupLabel = selectedPatient ? t[ageBandKey(selectedPatient.age)] || selectedPatient.groupLabel || '--' : '--'
 
   async function handleSelectPatient(patientId) {
+    setActionError('')
     setSelectedPatientId(patientId)
 
     try {
@@ -428,11 +523,17 @@ export default function App() {
   }
 
   function openCreateForm() {
+    const tempDefaults = getDefaultTemperatureValues(defaultTempRange)
+    setActionError('')
     setFormError('')
     setFormState({
-      id: null,
-      patientName: '',
-      age: ''
+      ...createEmptyFormState(),
+      normalTempMinC: tempDefaults.minC,
+      normalTempMaxC: tempDefaults.maxC
+    })
+    setAutoFillState({
+      targetRange: true,
+      tempRange: true
     })
     setIsFormOpen(true)
   }
@@ -442,24 +543,79 @@ export default function App() {
       return
     }
 
+    setActionError('')
     setFormError('')
     setFormState({
       id: selectedPatient.id,
       patientName: selectedPatient.patientName,
-      age: String(selectedPatient.age)
+      age: String(selectedPatient.age),
+      referenceMinBpm: String(selectedPatient.referenceMinBpm ?? ''),
+      referenceMaxBpm: String(selectedPatient.referenceMaxBpm ?? ''),
+      normalTempMinC: Number(selectedPatient.normalTempMinC).toFixed(1),
+      normalTempMaxC: Number(selectedPatient.normalTempMaxC).toFixed(1)
+    })
+    setAutoFillState({
+      targetRange: false,
+      tempRange: false
     })
     setIsFormOpen(true)
+  }
+
+  function handleAgeChange(nextAge) {
+    const targetDefaults = getDefaultTargetRange(nextAge, ageGroups)
+    const tempDefaults = getDefaultTemperatureValues(defaultTempRange)
+
+    setFormState((currentState) => {
+      const nextState = {
+        ...currentState,
+        age: nextAge
+      }
+
+      if (!currentState.id && !autoFillState.targetRange) {
+        nextState.referenceMinBpm = currentState.referenceMinBpm
+        nextState.referenceMaxBpm = currentState.referenceMaxBpm
+      } else if (!currentState.id) {
+        nextState.referenceMinBpm = targetDefaults.minBpm
+        nextState.referenceMaxBpm = targetDefaults.maxBpm
+      }
+
+      if (!currentState.id && !autoFillState.tempRange) {
+        nextState.normalTempMinC = currentState.normalTempMinC
+        nextState.normalTempMaxC = currentState.normalTempMaxC
+      } else if (!currentState.id) {
+        nextState.normalTempMinC = tempDefaults.minC
+        nextState.normalTempMaxC = tempDefaults.maxC
+      }
+
+      return nextState
+    })
+  }
+
+  function handleRangeChange(field, value, groupKey) {
+    setAutoFillState((currentState) => ({
+      ...currentState,
+      [groupKey]: false
+    }))
+    setFormState((currentState) => ({
+      ...currentState,
+      [field]: value
+    }))
   }
 
   async function handleSubmit(event) {
     event.preventDefault()
     setIsSaving(true)
     setFormError('')
+    setActionError('')
 
     try {
       const payload = {
         patientName: formState.patientName.trim(),
-        age: Number(formState.age)
+        age: Number(formState.age),
+        referenceMinBpm: Number(formState.referenceMinBpm),
+        referenceMaxBpm: Number(formState.referenceMaxBpm),
+        normalTempMinC: Number(formState.normalTempMinC),
+        normalTempMaxC: Number(formState.normalTempMaxC)
       }
 
       const result = formState.id
@@ -488,6 +644,37 @@ export default function App() {
     }
   }
 
+  async function handleDeletePatient() {
+    if (!selectedPatient || isDeleting) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      applyTemplate(t.deletePatientConfirm, {
+        patientName: selectedPatient.patientName
+      })
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    setIsDeleting(true)
+    setActionError('')
+
+    try {
+      await fetchJson(`/api/patients/${selectedPatient.id}`, {
+        method: 'DELETE'
+      })
+      setIsFormOpen(false)
+      await loadData()
+    } catch {
+      setActionError(t.deleteError)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   return (
     <div className={`app ${theme === 'light' ? 'light' : ''}`}>
       <header className="topbar">
@@ -504,6 +691,7 @@ export default function App() {
               : t.subtitle}
           </div>
           {hasLoadError ? <div className="subtle">{t.loadError}</div> : null}
+          {actionError ? <div className="subtle">{actionError}</div> : null}
         </div>
 
         <div className="topbar-actions">
@@ -566,7 +754,11 @@ export default function App() {
               ? `${Number(selectedNodeState.temperatureC).toFixed(1)} \u00B0C`
               : '--'}
           </div>
-          <div className="subtle">{t.normalTemp}</div>
+          <div className="subtle">
+            {applyTemplate(t.normalTemp, {
+              range: normalTemperatureRange
+            })}
+          </div>
         </section>
 
         <section className="center-panel">
@@ -658,15 +850,28 @@ export default function App() {
 
           <div className="topbar-actions">
             {selectedPatient ? (
-              <button
-                type="button"
-                className="icon-btn patient-action"
-                aria-label={t.editPatient}
-                title={t.editPatient}
-                onClick={openEditForm}
-              >
-                <img src="/icons/ui/edit.svg" alt="" className="icon-image mono-icon" />
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="icon-btn patient-action"
+                  aria-label={t.editPatient}
+                  title={t.editPatient}
+                  onClick={openEditForm}
+                  disabled={isDeleting}
+                >
+                  <img src="/icons/ui/edit.svg" alt="" className="icon-image mono-icon" />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn patient-action danger-btn"
+                  aria-label={t.deletePatient}
+                  title={t.deletePatient}
+                  onClick={handleDeletePatient}
+                  disabled={isDeleting}
+                >
+                  <span className="action-glyph" aria-hidden="true">DEL</span>
+                </button>
+              </>
             ) : null}
             <button
               type="button"
@@ -674,6 +879,7 @@ export default function App() {
               aria-label={t.addPatient}
               title={t.addPatient}
               onClick={openCreateForm}
+              disabled={isDeleting}
             >
               <img src="/icons/ui/add.svg" alt="" className="icon-image mono-icon" />
             </button>
@@ -736,19 +942,80 @@ export default function App() {
                   max="120"
                   step="1"
                   value={formState.age}
-                  onChange={(event) =>
-                    setFormState((currentState) => ({
-                      ...currentState,
-                      age: event.target.value
-                    }))
-                  }
+                  onChange={(event) => handleAgeChange(event.target.value)}
                   placeholder="0"
                   required
                 />
               </label>
 
+              <div className="form-section">
+                <div className="section-title">{t.targetRange}</div>
+                <div className="range-grid">
+                  <label>
+                    <span>{t.targetMinBpm}</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="120"
+                      step="1"
+                      value={formState.referenceMinBpm}
+                      onChange={(event) => handleRangeChange('referenceMinBpm', event.target.value, 'targetRange')}
+                      placeholder="0"
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    <span>{t.targetMaxBpm}</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="120"
+                      step="1"
+                      value={formState.referenceMaxBpm}
+                      onChange={(event) => handleRangeChange('referenceMaxBpm', event.target.value, 'targetRange')}
+                      placeholder="0"
+                      required
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="form-section">
+                <div className="section-title">{t.tempRange}</div>
+                <div className="range-grid">
+                  <label>
+                    <span>{t.tempMin}</span>
+                    <input
+                      type="number"
+                      min="30"
+                      max="45"
+                      step="0.1"
+                      value={formState.normalTempMinC}
+                      onChange={(event) => handleRangeChange('normalTempMinC', event.target.value, 'tempRange')}
+                      placeholder="36.5"
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    <span>{t.tempMax}</span>
+                    <input
+                      type="number"
+                      min="30"
+                      max="45"
+                      step="0.1"
+                      value={formState.normalTempMaxC}
+                      onChange={(event) => handleRangeChange('normalTempMaxC', event.target.value, 'tempRange')}
+                      placeholder="37.5"
+                      required
+                    />
+                  </label>
+                </div>
+              </div>
+
               <div className="subtle">{t.targetHint}</div>
-              {formError ? <div className="subtle">{formError}</div> : null}
+              {formError ? <div className="form-error">{formError}</div> : null}
 
               <div className="form-actions">
                 <button type="button" className="mode-btn" onClick={() => setIsFormOpen(false)}>

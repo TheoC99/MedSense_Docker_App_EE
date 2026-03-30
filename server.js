@@ -10,6 +10,9 @@ const __dirname = path.dirname(__filename)
 const app = express()
 const port = Number(process.env.PORT || 3000)
 const offlineAfterMs = 5000
+const defaultNormalTempMinC = 36.5
+const defaultNormalTempMaxC = 37.5
+const temperatureWarningOffsetC = 0.5
 
 const dataDir = path.join(__dirname, 'data')
 const patientsFile = path.join(dataDir, 'patients.json')
@@ -26,11 +29,51 @@ const ageGroups = [
   { key: 'infant', minAge: 0, maxAge: 0, minBpm: 30, maxBpm: 60, label: 'Infant' }
 ]
 
-function classifyTemperature(tempC) {
-  const value = Number(tempC)
-  if (!Number.isFinite(value)) return 'normal'
-  if (value > 38 || value < 36) return 'alarm'
-  if (value > 37.5 || value < 36.5) return 'warning'
+function parseFiniteNumber(value) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function roundToOneDecimal(value) {
+  return Math.round(value * 10) / 10
+}
+
+function defaultTemperatureRange() {
+  return {
+    minC: defaultNormalTempMinC,
+    maxC: defaultNormalTempMaxC
+  }
+}
+
+function resolveTemperatureRange(patient = {}) {
+  const defaults = defaultTemperatureRange()
+  const minC = parseFiniteNumber(patient.normalTempMinC)
+  const maxC = parseFiniteNumber(patient.normalTempMaxC)
+
+  if (minC === null || maxC === null || minC > maxC) {
+    return defaults
+  }
+
+  return {
+    minC: roundToOneDecimal(minC),
+    maxC: roundToOneDecimal(maxC)
+  }
+}
+
+function classifyTemperature(tempC, patient) {
+  const value = parseFiniteNumber(tempC)
+  if (value === null) return 'normal'
+
+  const range = resolveTemperatureRange(patient)
+
+  if (value > range.maxC + temperatureWarningOffsetC || value < range.minC - temperatureWarningOffsetC) {
+    return 'alarm'
+  }
+
+  if (value > range.maxC || value < range.minC) {
+    return 'warning'
+  }
+
   return 'normal'
 }
 
@@ -42,6 +85,26 @@ function ageToBand(age) {
 function defaultTargetBpm(age) {
   const band = ageToBand(age)
   return Math.round((band.minBpm + band.maxBpm) / 2)
+}
+
+function resolveBreathingRange(patient = {}, age) {
+  const band = ageToBand(age)
+  const minBpm = parseFiniteNumber(patient.referenceMinBpm)
+  const maxBpm = parseFiniteNumber(patient.referenceMaxBpm)
+
+  if (minBpm === null || maxBpm === null || minBpm < 1 || maxBpm > 120 || minBpm > maxBpm) {
+    return {
+      minBpm: band.minBpm,
+      maxBpm: band.maxBpm,
+      groupLabel: band.label
+    }
+  }
+
+  return {
+    minBpm: Math.round(minBpm),
+    maxBpm: Math.round(maxBpm),
+    groupLabel: band.label
+  }
 }
 
 function createInitialState() {
@@ -86,28 +149,36 @@ function createPatientChecksum(patient) {
         nodeId: patient.nodeId,
         patientName: patient.patientName,
         age: patient.age,
-        targetBpm: patient.targetBpm
+        targetBpm: patient.targetBpm,
+        referenceMinBpm: patient.referenceMinBpm,
+        referenceMaxBpm: patient.referenceMaxBpm,
+        normalTempMinC: patient.normalTempMinC,
+        normalTempMaxC: patient.normalTempMaxC
       })
     )
     .digest('hex')
 }
 
 function enrichPatient(patient, fallbackNodeId) {
-  const age = Number(patient.age)
-  const band = ageToBand(age)
-  const targetBpm = Number.isFinite(Number(patient.targetBpm))
-    ? Number(patient.targetBpm)
-    : defaultTargetBpm(age)
+  const age = parseFiniteNumber(patient.age) ?? 0
+  const breathingRange = resolveBreathingRange(patient, age)
+  const temperatureRange = resolveTemperatureRange(patient)
+  const requestedTargetBpm = parseFiniteNumber(patient.targetBpm)
+  const targetBpm = requestedTargetBpm !== null
+    ? Math.round(requestedTargetBpm)
+    : Math.round((breathingRange.minBpm + breathingRange.maxBpm) / 2)
 
   const normalizedPatient = {
     id: String(patient.id || `patient-${Date.now()}`),
-    nodeId: Number.isFinite(Number(patient.nodeId)) ? Number(patient.nodeId) : fallbackNodeId,
+    nodeId: parseFiniteNumber(patient.nodeId) ?? fallbackNodeId,
     patientName: String(patient.patientName || '').trim(),
     age,
     targetBpm,
-    referenceMinBpm: band.minBpm,
-    referenceMaxBpm: band.maxBpm,
-    groupLabel: band.label,
+    referenceMinBpm: breathingRange.minBpm,
+    referenceMaxBpm: breathingRange.maxBpm,
+    normalTempMinC: temperatureRange.minC,
+    normalTempMaxC: temperatureRange.maxC,
+    groupLabel: breathingRange.groupLabel,
     updatedAt: typeof patient.updatedAt === 'string' ? patient.updatedAt : new Date().toISOString()
   }
 
@@ -130,7 +201,20 @@ function writePatients(patients) {
 }
 
 function nextNodeId(patients) {
-  return patients.reduce((maxNodeId, patient) => Math.max(maxNodeId, Number(patient.nodeId) || 0), 0) + 1
+  const usedNodeIds = new Set(
+    patients
+      .map((patient) => parseFiniteNumber(patient.nodeId))
+      .filter((nodeId) => nodeId !== null)
+      .map((nodeId) => Math.round(nodeId))
+      .filter((nodeId) => nodeId > 0)
+  )
+
+  let candidate = 1
+  while (usedNodeIds.has(candidate)) {
+    candidate += 1
+  }
+
+  return candidate
 }
 
 function getPatientById(patientId, patients = getRealPatients()) {
@@ -142,18 +226,18 @@ function getPatientByNodeId(nodeId, patients = getRealPatients()) {
 }
 
 function normalizeNodeState(nodeState = {}) {
-  const nodeId = Number(nodeState.nodeId)
-  if (!Number.isFinite(nodeId)) return null
+  const nodeId = parseFiniteNumber(nodeState.nodeId)
+  if (nodeId === null) return null
 
   return {
-    nodeId,
+    nodeId: Math.round(nodeId),
     online: Boolean(nodeState.online),
-    latencyMs: Number.isFinite(Number(nodeState.latencyMs)) ? Number(nodeState.latencyMs) : 0,
-    breathsPerMinute: Number.isFinite(Number(nodeState.breathsPerMinute)) ? Number(nodeState.breathsPerMinute) : 0,
-    breathingLevel: Number.isFinite(Number(nodeState.breathingLevel)) ? Number(nodeState.breathingLevel) : 0,
-    temperatureC: Number.isFinite(Number(nodeState.temperatureC)) ? Number(nodeState.temperatureC) : null,
-    temperatureState: classifyTemperature(nodeState.temperatureC),
-    lastSeenEpochMs: Number.isFinite(Number(nodeState.lastSeenEpochMs)) ? Number(nodeState.lastSeenEpochMs) : 0,
+    latencyMs: parseFiniteNumber(nodeState.latencyMs) ?? 0,
+    breathsPerMinute: parseFiniteNumber(nodeState.breathsPerMinute) ?? 0,
+    breathingLevel: parseFiniteNumber(nodeState.breathingLevel) ?? 0,
+    temperatureC: parseFiniteNumber(nodeState.temperatureC),
+    temperatureState: String(nodeState.temperatureState || 'normal'),
+    lastSeenEpochMs: parseFiniteNumber(nodeState.lastSeenEpochMs) ?? 0,
     source: String(nodeState.source || 'gateway')
   }
 }
@@ -196,6 +280,7 @@ function writeState(state) {
 }
 
 function withComputedNodeStatus(state) {
+  const patientsByNodeId = new Map(getRealPatients().map((patient) => [String(patient.nodeId), patient]))
   const responseState = {
     ...state,
     nodeStates: {}
@@ -205,9 +290,11 @@ function withComputedNodeStatus(state) {
     const nodeState = normalizeNodeState(rawNodeState)
     if (!nodeState) return
 
+    const patient = patientsByNodeId.get(String(nodeState.nodeId)) || null
     responseState.nodeStates[nodeKey] = {
       ...nodeState,
-      online: (Date.now() - nodeState.lastSeenEpochMs) <= offlineAfterMs
+      online: (Date.now() - nodeState.lastSeenEpochMs) <= offlineAfterMs,
+      temperatureState: classifyTemperature(nodeState.temperatureC, patient)
     }
   })
 
@@ -225,8 +312,81 @@ function toGatewayPatient(patient) {
     targetBpm: patient.targetBpm,
     referenceMinBpm: patient.referenceMinBpm,
     referenceMaxBpm: patient.referenceMaxBpm,
+    normalTempMinC: patient.normalTempMinC,
+    normalTempMaxC: patient.normalTempMaxC,
     groupLabel: patient.groupLabel,
     profileChecksum: patient.profileChecksum
+  }
+}
+
+function validatePatientPayload(body) {
+  const patientName = String(body?.patientName || '').trim()
+  const age = parseFiniteNumber(body?.age)
+  const requestedTargetBpm = body?.targetBpm
+  const referenceMinBpm = body?.referenceMinBpm
+  const referenceMaxBpm = body?.referenceMaxBpm
+  const normalTempMinC = body?.normalTempMinC
+  const normalTempMaxC = body?.normalTempMaxC
+
+  if (!patientName) {
+    return { error: 'patientName is required' }
+  }
+
+  if (age === null || age < 0 || age > 120) {
+    return { error: 'age must be between 0 and 120' }
+  }
+
+  if (requestedTargetBpm !== undefined && requestedTargetBpm !== null && requestedTargetBpm !== '' && ((parseFiniteNumber(requestedTargetBpm) ?? 0) < 1 || (parseFiniteNumber(requestedTargetBpm) ?? 0) > 120)) {
+    return { error: 'targetBpm must be between 1 and 120' }
+  }
+
+  const parsedTargetBpm = parseFiniteNumber(requestedTargetBpm)
+  if (referenceMinBpm !== undefined && referenceMinBpm !== null && referenceMinBpm !== '' && ((parseFiniteNumber(referenceMinBpm) ?? 0) < 1 || (parseFiniteNumber(referenceMinBpm) ?? 0) > 120)) {
+    return { error: 'referenceMinBpm must be between 1 and 120' }
+  }
+
+  if (referenceMaxBpm !== undefined && referenceMaxBpm !== null && referenceMaxBpm !== '' && ((parseFiniteNumber(referenceMaxBpm) ?? 0) < 1 || (parseFiniteNumber(referenceMaxBpm) ?? 0) > 120)) {
+    return { error: 'referenceMaxBpm must be between 1 and 120' }
+  }
+
+  const parsedReferenceMinBpm = parseFiniteNumber(referenceMinBpm)
+  const parsedReferenceMaxBpm = parseFiniteNumber(referenceMaxBpm)
+  if (parsedReferenceMinBpm !== null && parsedReferenceMaxBpm !== null && parsedReferenceMinBpm > parsedReferenceMaxBpm) {
+    return { error: 'referenceMinBpm must be <= referenceMaxBpm' }
+  }
+
+  if (normalTempMinC !== undefined && normalTempMinC !== null && normalTempMinC !== '' && ((parseFiniteNumber(normalTempMinC) ?? 0) < 30 || (parseFiniteNumber(normalTempMinC) ?? 0) > 45)) {
+    return { error: 'normalTempMinC must be between 30 and 45' }
+  }
+
+  if (normalTempMaxC !== undefined && normalTempMaxC !== null && normalTempMaxC !== '' && ((parseFiniteNumber(normalTempMaxC) ?? 0) < 30 || (parseFiniteNumber(normalTempMaxC) ?? 0) > 45)) {
+    return { error: 'normalTempMaxC must be between 30 and 45' }
+  }
+
+  const parsedNormalTempMinC = parseFiniteNumber(normalTempMinC)
+  const parsedNormalTempMaxC = parseFiniteNumber(normalTempMaxC)
+  if (parsedNormalTempMinC !== null && parsedNormalTempMaxC !== null && parsedNormalTempMinC > parsedNormalTempMaxC) {
+    return { error: 'normalTempMinC must be <= normalTempMaxC' }
+  }
+
+  return {
+    patientName,
+    age,
+    targetBpm: requestedTargetBpm === undefined || requestedTargetBpm === null || requestedTargetBpm === ''
+      ? undefined
+      : Math.round(parsedTargetBpm),
+    referenceMinBpm: referenceMinBpm === undefined || referenceMinBpm === null || referenceMinBpm === ''
+      ? undefined
+      : Math.round(parsedReferenceMinBpm),
+    referenceMaxBpm: referenceMaxBpm === undefined || referenceMaxBpm === null || referenceMaxBpm === ''
+      ? undefined
+      : Math.round(parsedReferenceMaxBpm),
+    normalTempMinC: normalTempMinC === undefined || normalTempMinC === null || normalTempMinC === ''
+      ? undefined
+      : roundToOneDecimal(parsedNormalTempMinC),
+    normalTempMaxC: normalTempMaxC === undefined || normalTempMaxC === null || normalTempMaxC === ''
+      ? undefined
+      : roundToOneDecimal(parsedNormalTempMaxC)
   }
 }
 
@@ -246,6 +406,8 @@ app.get('/health', (_req, res) => {
 app.get('/api/config', (_req, res) => {
   res.json({
     ageGroups,
+    defaultTemperatureRange: defaultTemperatureRange(),
+    temperatureWarningOffsetC,
     authEnabled: false,
     theme: 'dark',
     languages: ['en', 'nl', 'ja']
@@ -278,32 +440,20 @@ app.get('/api/gateway/patients', (req, res) => {
 })
 
 app.post('/api/patients', (req, res) => {
-  const patientName = String(req.body?.patientName || '').trim()
-  const age = Number(req.body?.age)
-  const requestedTargetBpm = req.body?.targetBpm
-
-  if (!patientName) {
-    return res.status(400).json({ error: 'patientName is required' })
-  }
-
-  if (!Number.isFinite(age) || age < 0 || age > 120) {
-    return res.status(400).json({ error: 'age must be between 0 and 120' })
-  }
-
-  if (requestedTargetBpm !== undefined && requestedTargetBpm !== null && requestedTargetBpm !== '' && (!Number.isFinite(Number(requestedTargetBpm)) || Number(requestedTargetBpm) < 1 || Number(requestedTargetBpm) > 120)) {
-    return res.status(400).json({ error: 'targetBpm must be between 1 and 120' })
+  const payload = validatePatientPayload(req.body)
+  if (payload.error) {
+    return res.status(400).json({ error: payload.error })
   }
 
   const patients = getRealPatients()
+  const nodeId = nextNodeId(patients)
   const patient = enrichPatient(
     {
       id: `patient-${Date.now()}`,
-      nodeId: nextNodeId(patients),
-      patientName,
-      age,
-      targetBpm: requestedTargetBpm
+      nodeId,
+      ...payload
     },
-    nextNodeId(patients)
+    nodeId
   )
 
   patients.push(patient)
@@ -321,20 +471,9 @@ app.post('/api/patients', (req, res) => {
 
 app.put('/api/patients/:id', (req, res) => {
   const patientId = String(req.params.id || '')
-  const patientName = String(req.body?.patientName || '').trim()
-  const age = Number(req.body?.age)
-  const requestedTargetBpm = req.body?.targetBpm
-
-  if (!patientName) {
-    return res.status(400).json({ error: 'patientName is required' })
-  }
-
-  if (!Number.isFinite(age) || age < 0 || age > 120) {
-    return res.status(400).json({ error: 'age must be between 0 and 120' })
-  }
-
-  if (requestedTargetBpm !== undefined && requestedTargetBpm !== null && requestedTargetBpm !== '' && (!Number.isFinite(Number(requestedTargetBpm)) || Number(requestedTargetBpm) < 1 || Number(requestedTargetBpm) > 120)) {
-    return res.status(400).json({ error: 'targetBpm must be between 1 and 120' })
+  const payload = validatePatientPayload(req.body)
+  if (payload.error) {
+    return res.status(400).json({ error: payload.error })
   }
 
   const patients = getRealPatients()
@@ -348,9 +487,13 @@ app.put('/api/patients/:id', (req, res) => {
   const updatedPatient = enrichPatient(
     {
       ...existingPatient,
-      patientName,
-      age,
-      targetBpm: requestedTargetBpm,
+      patientName: payload.patientName,
+      age: payload.age,
+      targetBpm: payload.targetBpm ?? existingPatient.targetBpm,
+      referenceMinBpm: payload.referenceMinBpm ?? existingPatient.referenceMinBpm,
+      referenceMaxBpm: payload.referenceMaxBpm ?? existingPatient.referenceMaxBpm,
+      normalTempMinC: payload.normalTempMinC ?? existingPatient.normalTempMinC,
+      normalTempMaxC: payload.normalTempMaxC ?? existingPatient.normalTempMaxC,
       updatedAt: new Date().toISOString()
     },
     existingPatient.nodeId
@@ -364,6 +507,32 @@ app.put('/api/patients/:id', (req, res) => {
   writeState(state)
 
   res.json(updatedPatient)
+})
+
+app.delete('/api/patients/:id', (req, res) => {
+  const patientId = String(req.params.id || '')
+  const patients = getRealPatients()
+  const index = patients.findIndex((patient) => patient.id === patientId)
+
+  if (index < 0) {
+    return res.status(404).json({ error: 'patient not found' })
+  }
+
+  const [removedPatient] = patients.splice(index, 1)
+  writePatients(patients)
+
+  const state = readState()
+  if (state.selectedPatientId === removedPatient.id) {
+    state.selectedPatientId = patients[0]?.id || null
+  }
+  state.updatedAt = new Date().toISOString()
+  writeState(state)
+
+  res.json({
+    ok: true,
+    removedPatientId: removedPatient.id,
+    selectedPatientId: state.selectedPatientId
+  })
 })
 
 app.get('/api/state', (_req, res) => {
@@ -400,6 +569,7 @@ app.post('/api/medsense', (req, res) => {
   const temperatureC = Number.isFinite(Number(body.temperatureC)) ? Number(body.temperatureC) : null
   const latencyMs = Number.isFinite(Number(body.latencyMs)) ? Number(body.latencyMs) : 0
   const patientChecksum = String(body.patientChecksum || '')
+  const patient = getPatientByNodeId(nodeId)
 
   const state = readState()
   state.nodeStates[String(nodeId)] = {
@@ -409,20 +579,19 @@ app.post('/api/medsense', (req, res) => {
     breathsPerMinute,
     breathingLevel,
     temperatureC,
-    temperatureState: classifyTemperature(temperatureC),
+    temperatureState: classifyTemperature(temperatureC, patient),
     lastSeenEpochMs: now,
     source: 'gateway'
   }
   state.updatedAt = new Date().toISOString()
 
-  const patient = getPatientByNodeId(nodeId)
   if (!state.selectedPatientId && patient) {
     state.selectedPatientId = patient.id
   }
 
   writeState(state)
 
-  const patientChanged = Boolean(patient) && patient.profileChecksum !== patientChecksum
+  const patientChanged = patient ? patient.profileChecksum !== patientChecksum : Boolean(patientChecksum)
 
   res.json({
     ok: true,
