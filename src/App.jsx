@@ -784,18 +784,19 @@ export default function App() {
           <article className="card gauge-card">
             <div className="section-title">{t.breathingRate}</div>
             <div className="gauge-shell">
-              <div className="gauge-ring" style={gaugeStyle}>
-                <div className="gauge-inner">
-                  <div>
+              <div className="gauge-wrap">
+                <div className="gauge-edge gauge-edge-left">
+                  {Number.isFinite(minTargetBpm) ? minTargetBpm : '--'}
+                </div>
+                <div className="gauge-ring" style={gaugeStyle}>
+                  <div className="gauge-inner">
                     <div className="gauge-value" style={{ color: gaugeValueColor }}>
                       {Number.isFinite(currentBpm) ? currentBpm : '--'}
                     </div>
-                    <div className="subtle">
-                      {applyTemplate(t.gaugeTarget, {
-                        targetRange
-                      })}
-                    </div>
                   </div>
+                </div>
+                <div className="gauge-edge gauge-edge-right">
+                  {Number.isFinite(maxTargetBpm) ? maxTargetBpm : '--'}
                 </div>
               </div>
             </div>
