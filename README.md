@@ -1,6 +1,7 @@
 # MedSense HMI Docker App
 
 MedSense is a lightweight full-stack HMI for displaying patient-linked breathing and temperature data from a gateway or ESP32-based node setup.
+
 This project was build by 1st year Electical Engineering students for the purpose of learning to work with sensors, diepen understanding of electrical circuits, HMI and communication protocols.
 
 This repository contains:
