@@ -459,14 +459,11 @@ export default function App() {
     hasValidTargetRange &&
     currentBpm >= minTargetBpm &&
     currentBpm <= maxTargetBpm
-  const gaugeStyle =
-    hasValidTargetRange
-      ? {
-          background: 'conic-gradient(from -90deg, rgba(239, 68, 68, 0.9) 0 64%, rgba(34, 197, 94, 0.94) 64% 86%, rgba(239, 68, 68, 0.9) 86% 100%)'
-        }
-      : {
-          background: 'conic-gradient(from -90deg, rgba(148, 163, 184, 0.18) 0 100%)'
-        }
+  const gaugeArcStyle = {
+    '--gauge-arc-color': hasValidTargetRange
+      ? 'rgba(34, 197, 94, 0.94)'
+      : 'rgba(148, 163, 184, 0.28)'
+  }
   const gaugeValueColor = Number.isFinite(currentBpm)
     ? hasValidTargetRange
       ? bpmInRange
@@ -767,26 +764,23 @@ export default function App() {
             </div>
           </article>
 
-          <article className="card gauge-card">
-            <div className="section-title">{t.breathingRate}</div>
-            <div className="gauge-shell">
-              <div className="gauge-wrap">
-                <div className="gauge-edge gauge-edge-left">
-                  {Number.isFinite(minTargetBpm) ? minTargetBpm : '--'}
-                </div>
-                <div className="gauge-ring" style={gaugeStyle}>
-                  <div className="gauge-inner">
-                    <div className="gauge-value" style={{ color: gaugeValueColor }}>
-                      {Number.isFinite(currentBpm) ? currentBpm : '--'}
-                    </div>
+            <article className="card gauge-card">
+              <div className="section-title">{t.breathingRate}</div>
+              <div className="gauge-shell">
+                <div className="gauge-wrap">
+                  <div className="gauge-arc" style={gaugeArcStyle} />
+                  <div className="gauge-edge gauge-edge-left">
+                    {Number.isFinite(minTargetBpm) ? minTargetBpm : '--'}
+                  </div>
+                  <div className="gauge-value" style={{ color: gaugeValueColor }}>
+                    {Number.isFinite(currentBpm) ? currentBpm : '--'}
+                  </div>
+                  <div className="gauge-edge gauge-edge-right">
+                    {Number.isFinite(maxTargetBpm) ? maxTargetBpm : '--'}
                   </div>
                 </div>
-                <div className="gauge-edge gauge-edge-right">
-                  {Number.isFinite(maxTargetBpm) ? maxTargetBpm : '--'}
-                </div>
               </div>
-            </div>
-          </article>
+            </article>
         </section>
 
         <section className="card status-card">
