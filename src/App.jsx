@@ -462,7 +462,7 @@ export default function App() {
   const gaugeStyle =
     hasValidTargetRange
       ? {
-          background: 'conic-gradient(from -90deg, rgba(34, 197, 94, 0.94) 0 12%, rgba(239, 68, 68, 0.9) 12% 88%, rgba(34, 197, 94, 0.94) 88% 100%)'
+          background: 'conic-gradient(from -90deg, rgba(239, 68, 68, 0.9) 0 64%, rgba(34, 197, 94, 0.94) 64% 86%, rgba(239, 68, 68, 0.9) 86% 100%)'
         }
       : {
           background: 'conic-gradient(from -90deg, rgba(148, 163, 184, 0.18) 0 100%)'
@@ -733,13 +733,13 @@ export default function App() {
       </header>
 
       <main className="dashboard">
-        <section className="card temp-card">
-          <div className="section-title">{t.temperature}</div>
-          <div className={`temp-value ${temperatureState}`}>
-            {Number.isFinite(Number(selectedNodeState?.temperatureC))
-              ? `${Number(selectedNodeState.temperatureC).toFixed(1)} \u00B0C`
-              : '--'}
-          </div>
+          <section className="card temp-card">
+            <div className="section-title">{t.temperature}</div>
+            <div className={`temp-value ${temperatureState}`}>
+              {Number.isFinite(Number(selectedNodeState?.temperatureC))
+                ? `${Number(selectedNodeState.temperatureC).toFixed(1)}\u00A0\u00B0C`
+                : '--'}
+            </div>
           <div className="subtle">
             {applyTemplate(t.normalTemp, {
               range: normalTemperatureRange
