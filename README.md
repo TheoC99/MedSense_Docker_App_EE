@@ -1,56 +1,59 @@
-# MedSense HMI Docker
-vite-plugin-pwa + React + Vite
+# MedSense HMI Docker App
 
-## Start locally
-```bash
-npm install
-npm run build
-npm run start
-```
+MedSense is a lightweight full-stack HMI for displaying patient-linked breathing and temperature data from a gateway or ESP32-based node setup.
 
-## Start with Docker
-```bash
-docker compose up --build -d
-```
+This repository contains:
 
-Open `http://localhost:3000`
+- a React + Vite frontend
+- an Express backend API
+- JSON file persistence
+- Docker deployment
+- optional Cloudflare Tunnel support
 
-## Start with Cloudflare Tunnel
-```bash
-cp .env.example .env
-nano .env
-```
-Paste your tunnel token, save, then:
+## What it does
 
-```bash
-docker compose --profile cloudflare up --build -d
-```
+The app has two main jobs:
 
-## API payload expected from ESP32
-```json
-{
-  "mode": "live",
-  "nodeId": 1,
-  "patientName": "Theo Demo",
-  "age": 26,
-  "breathsPerMinute": 18,
-  "breathingLevel": 64,
-  "temperatureC": 37.2,
-  "latencyMs": 146
-}
-```
-## Gateway Serial commands
-``` bash
-help
-show
-name=Theo test
-age=33
-node=2
-bpm=20
-level=65
-temp=37.4
-lat=150
-auto=on
-auto=off
-postnow
-```
+1. show live node data in the HMI
+2. keep gateway-side patient configuration in sync
+
+The HMI shows:
+
+- selected patient
+- linked node ID
+- breaths per minute
+- breathing level
+- temperature
+- online/offline status
+- freshness / last update
+- patient-specific target ranges
+
+The backend:
+
+- stores patients in `data/patients.json`
+- stores latest node state in `data/last-state.json`
+- receives live telemetry from the gateway
+- computes online/offline state
+- exposes endpoints for the HMI
+- exposes checksum-based sync endpoints for the gateway
+
+## Stack
+
+- React 18
+- Vite
+- vite-plugin-pwa
+- Express
+- Docker / Docker Compose
+
+## Project structure
+
+```text
+.
+├─ src/                 # React frontend
+├─ dist/                # Built frontend output
+├─ data/                # JSON persistence
+├─ server.js            # Express API + static server
+├─ Dockerfile
+├─ docker-compose.yml
+├─ package.json
+└─ vite.config.js
