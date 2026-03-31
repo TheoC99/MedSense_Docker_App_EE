@@ -453,34 +453,20 @@ export default function App() {
   const minTargetBpm = Number(selectedPatient?.referenceMinBpm)
   const maxTargetBpm = Number(selectedPatient?.referenceMaxBpm)
   const currentBpm = Number(selectedNodeState?.breathsPerMinute)
+  const hasValidTargetRange = Number.isFinite(minTargetBpm) && Number.isFinite(maxTargetBpm)
   const bpmInRange =
     Number.isFinite(currentBpm) &&
-    Number.isFinite(minTargetBpm) &&
-    Number.isFinite(maxTargetBpm) &&
+    hasValidTargetRange &&
     currentBpm >= minTargetBpm &&
     currentBpm <= maxTargetBpm
-  const gaugeScaleMax = Math.ceil(
-    Math.max(
-      Number.isFinite(maxTargetBpm) ? maxTargetBpm + 10 : 0,
-      Number.isFinite(currentBpm) ? currentBpm + 5 : 0,
-      40
-    ) / 5
-  ) * 5
-  const rangeStartPercent = Number.isFinite(minTargetBpm)
-    ? clamp(Math.round((minTargetBpm / gaugeScaleMax) * 100), 0, 100)
-    : 0
-  const rangeEndPercent = Number.isFinite(maxTargetBpm)
-    ? clamp(Math.round((maxTargetBpm / gaugeScaleMax) * 100), 0, 100)
-    : 100
   const gaugeStyle =
-    Number.isFinite(minTargetBpm) && Number.isFinite(maxTargetBpm)
+    hasValidTargetRange
       ? {
-          background: `conic-gradient(from -90deg, rgba(239, 68, 68, 0.88) 0 ${rangeStartPercent}%, rgba(34, 197, 94, 0.88) ${rangeStartPercent}% ${rangeEndPercent}%, rgba(239, 68, 68, 0.88) ${rangeEndPercent}% 100%)`
+          background: 'conic-gradient(from -90deg, rgba(34, 197, 94, 0.94) 0 12%, rgba(239, 68, 68, 0.9) 12% 88%, rgba(34, 197, 94, 0.94) 88% 100%)'
         }
       : {
           background: 'conic-gradient(from -90deg, rgba(148, 163, 184, 0.18) 0 100%)'
         }
-  const hasValidTargetRange = Number.isFinite(minTargetBpm) && Number.isFinite(maxTargetBpm)
   const gaugeValueColor = Number.isFinite(currentBpm)
     ? hasValidTargetRange
       ? bpmInRange
