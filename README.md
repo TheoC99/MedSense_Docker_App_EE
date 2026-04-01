@@ -10,7 +10,7 @@ This repository contains:
 - an Express backend API
 - JSON file persistence
 - Docker deployment
-- optional Cloudflare Tunnel support
+- Cloudflare Tunnel support
 
 ## What it does
 
